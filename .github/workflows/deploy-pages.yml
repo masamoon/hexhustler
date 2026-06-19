@@ -56,6 +56,23 @@ jobs:
           set -euo pipefail
           mkdir -p "$(dirname "${EXPORT_PATH}")"
           godot --headless --path . --export-release "${EXPORT_PRESET}" "${EXPORT_PATH}"
+          versioned_base="hexhustler-${GITHUB_SHA::7}"
+          mv build/web/index.js "build/web/${versioned_base}.js"
+          mv build/web/index.wasm "build/web/${versioned_base}.wasm"
+          mv build/web/index.pck "build/web/${versioned_base}.pck"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          versioned_base = f"hexhustler-{os.environ['GITHUB_SHA'][:7]}"
+          html_path = Path("build/web/index.html")
+          html = html_path.read_text()
+          html = html.replace('src="index.js"', f'src="{versioned_base}.js"')
+          html = html.replace('"executable":"index"', f'"executable":"{versioned_base}"')
+          html = html.replace('"index.pck"', f'"{versioned_base}.pck"')
+          html = html.replace('"index.wasm"', f'"{versioned_base}.wasm"')
+          html_path.write_text(html)
+          PY
           touch build/web/.nojekyll
 
       - name: Upload Pages Artifact
