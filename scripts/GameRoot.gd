@@ -202,6 +202,9 @@ var browser_pocket_test_case: Dictionary = {}
 var browser_pocket_test_ball = null
 var browser_pocket_test_started_at := 0.0
 var browser_pocket_test_min_distance := INF
+var browser_run_test_enabled := false
+var browser_run_test_shops_seen := 0
+var browser_run_test_target_shops := 4
 var menu_panel: PanelContainer
 var menu_scroll: ScrollContainer
 var menu_root: VBoxContainer
@@ -786,6 +789,7 @@ func _ready() -> void:
 	_layout_for_viewport()
 	_show_main_menu()
 	call_deferred("_maybe_start_browser_pocket_test")
+	call_deferred("_maybe_start_browser_run_test")
 
 func _maybe_start_browser_pocket_test() -> void:
 	if not _web_query_has_flag("pocket_test"):
@@ -829,7 +833,13 @@ func _browser_pocket_test_cases() -> Array[Dictionary]:
 		{"name": "SW south rail", "pocket": &"SW", "lane": &"bottom"},
 		{"name": "SW west rail", "pocket": &"SW", "lane": &"left"},
 		{"name": "SE south rail", "pocket": &"SE", "lane": &"bottom"},
-		{"name": "SE east rail", "pocket": &"SE", "lane": &"right"}
+		{"name": "SE east rail", "pocket": &"SE", "lane": &"right"},
+		{"name": "NW edge graze", "pocket": &"NW", "lane": &"edge", "expect": false},
+		{"name": "NE edge graze", "pocket": &"NE", "lane": &"edge", "expect": false},
+		{"name": "SW edge graze", "pocket": &"SW", "lane": &"edge", "expect": false},
+		{"name": "SE edge graze", "pocket": &"SE", "lane": &"edge", "expect": false},
+		{"name": "N edge graze", "pocket": &"N", "lane": &"edge", "expect": false},
+		{"name": "S edge graze", "pocket": &"S", "lane": &"edge", "expect": false}
 	]
 
 func _start_next_browser_pocket_test() -> void:
@@ -900,7 +910,15 @@ func _browser_pocket_test_vectors(pocket, lane: StringName) -> Dictionary:
 	var pos: Vector2 = pocket.global_position
 	var speed := 560.0
 	var start := TABLE_RECT.get_center()
+	var target := pos
 	match lane:
+		&"edge":
+			var radial := (pos - TABLE_RECT.get_center()).normalized()
+			var tangent := Vector2(-radial.y, radial.x)
+			target = pos + tangent * (BALL_RADIUS * 3.25)
+			if not TABLE_RECT.grow(24.0).has_point(target):
+				target = pos - tangent * (BALL_RADIUS * 3.25)
+			start = target - radial * 210.0
 		&"top":
 			start = Vector2(pos.x + (150.0 if String(pocket.pocket_id) == "NW" else -150.0), TABLE_RECT.position.y + BALL_RADIUS + 8.0)
 		&"bottom":
@@ -913,7 +931,7 @@ func _browser_pocket_test_vectors(pocket, lane: StringName) -> Dictionary:
 			var from_center := (pos - TABLE_RECT.get_center()).normalized()
 			start = pos - from_center * 210.0
 	start = _clamp_ball_inside_table(start, BALL_RADIUS + 8.0)
-	var dir := (pos - start).normalized()
+	var dir := (target - start).normalized()
 	if dir.length() <= 0.01:
 		dir = Vector2.RIGHT
 	return {"start": start, "velocity": dir * speed}
@@ -928,12 +946,14 @@ func _update_browser_pocket_test(delta: float) -> void:
 		browser_pocket_test_active = false
 		call_deferred("_start_next_browser_pocket_test")
 		return
+	var expected_pot := bool(browser_pocket_test_case.get("expect", true))
 	var target_pocket = _pocket_by_id(StringName(browser_pocket_test_case.get("pocket", &"")))
 	if target_pocket != null:
 		browser_pocket_test_min_distance = minf(browser_pocket_test_min_distance, browser_pocket_test_ball.global_position.distance_to(target_pocket.global_position))
 	if browser_pocket_test_ball.potted:
-		browser_pocket_test_results.append(case_name + ":PASS")
-		_browser_pocket_test_log("POCKET_TEST_PASS " + case_name)
+		var result := "PASS" if expected_pot else "FAIL sucked"
+		browser_pocket_test_results.append(case_name + ":" + result)
+		_browser_pocket_test_log("POCKET_TEST_" + result.replace(" ", "_") + " " + case_name)
 		browser_pocket_test_active = false
 		call_deferred("_start_next_browser_pocket_test")
 		return
@@ -941,10 +961,82 @@ func _update_browser_pocket_test(delta: float) -> void:
 		var pos: Vector2 = browser_pocket_test_ball.global_position
 		var vel: Vector2 = browser_pocket_test_ball.linear_velocity
 		var recent := _recent_event_lines(8).replace("\n", " / ")
-		browser_pocket_test_results.append(case_name + ":FAIL pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))))
-		_browser_pocket_test_log("POCKET_TEST_FAIL " + case_name + " pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " recent=" + recent)
+		if expected_pot:
+			browser_pocket_test_results.append(case_name + ":FAIL pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))))
+			_browser_pocket_test_log("POCKET_TEST_FAIL " + case_name + " pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " recent=" + recent)
+		else:
+			browser_pocket_test_results.append(case_name + ":PASS miss")
+			_browser_pocket_test_log("POCKET_TEST_PASS_MISS " + case_name + " pos=" + str(pos.round()) + " min=" + str(int(round(browser_pocket_test_min_distance))))
 		browser_pocket_test_active = false
 		call_deferred("_start_next_browser_pocket_test")
+
+func _maybe_start_browser_run_test() -> void:
+	if browser_pocket_test_enabled or not _web_query_has_flag("run_test"):
+		return
+	browser_run_test_enabled = true
+	browser_run_test_shops_seen = 0
+	_browser_run_test_log("RUN_TEST_BOOT")
+	_start_run(false, 5)
+	call_deferred("_browser_run_test_clear_table")
+
+func _browser_run_test_log(message: String) -> void:
+	print(message)
+	if OS.get_name() != "Web":
+		return
+	var js_message := JSON.stringify(message)
+	JavaScriptBridge.eval("window.__hexRunTestLog = window.__hexRunTestLog || []; window.__hexRunTestLog.push(" + js_message + "); document.title = " + JSON.stringify("HexHustler " + message.left(48)) + ";", true)
+
+func _browser_run_test_clear_table() -> void:
+	if not browser_run_test_enabled:
+		return
+	if state != State.AIMING:
+		call_deferred("_browser_run_test_step")
+		return
+	var summary := ShotSummary.new()
+	summary.tags.append(&"POT")
+	summary.tags.append(&"LONG_POT")
+	summary.potted_ball_ids.append(&"run_test_ball")
+	summary.potted_kinds.append(&"normal")
+	summary.pocket_ids.append(&"N")
+	summary.base_score = int(current_table.get("target_score", 650))
+	summary.final_score = summary.base_score
+	summary.cash_delta = 3
+	summary.style_delta = 1
+	summary.breakdown.append("Run test clear")
+	table_score = maxi(table_score, int(current_table.get("target_score", 650)))
+	potted_count_this_table = maxi(potted_count_this_table, int(current_table.get("required_pots", 1)))
+	gold_potted_this_table = maxi(gold_potted_this_table, int(current_table.get("target_gold", 0)))
+	table_shots_used = mini(2, int(current_table.get("shot_limit", 6)))
+	shots_remaining = maxi(1, shots_remaining - table_shots_used)
+	last_summary = summary
+	completed_current_table = true
+	_complete_table(summary)
+	call_deferred("_browser_run_test_step")
+
+func _browser_run_test_step() -> void:
+	if not browser_run_test_enabled:
+		return
+	if state == State.RUN_COMPLETE or state == State.RUN_FAILED:
+		_browser_run_test_log("RUN_TEST_DONE shops=" + str(browser_run_test_shops_seen) + " state=" + State.keys()[state])
+		browser_run_test_enabled = false
+		return
+	if not reward_panel.visible:
+		call_deferred("_browser_run_test_clear_table")
+		return
+	browser_run_test_shops_seen += 1
+	var lines: Array[String] = []
+	lines.append("RUN_TEST_SHOP " + str(browser_run_test_shops_seen) + " " + String(current_table.get("name", "Table")) + " | " + reward_title.text)
+	lines.append("Summary: " + reward_summary_label.text.replace("\n", " / "))
+	for button in reward_buttons:
+		if button.visible:
+			lines.append("Offer: " + button.text.replace("\n", " / "))
+	_browser_run_test_log(" || ".join(lines))
+	if browser_run_test_shops_seen >= browser_run_test_target_shops:
+		_browser_run_test_log("RUN_TEST_DONE shops=" + str(browser_run_test_shops_seen))
+		browser_run_test_enabled = false
+		return
+	_on_reward_button_pressed(0)
+	call_deferred("_browser_run_test_clear_table")
 
 func _build_world() -> void:
 	world = Node2D.new()
@@ -1086,7 +1178,7 @@ func _layout_overlay_panels(viewport_size: Vector2) -> void:
 		var pause_size := Vector2(minf(980.0, viewport_size.x - 96.0), minf(704.0, viewport_size.y - 96.0))
 		_set_control_rect(pause_panel, (viewport_size - pause_size) * 0.5, pause_size)
 	if reward_panel != null:
-		var reward_size := Vector2(minf(948.0, viewport_size.x - 96.0), minf(760.0, viewport_size.y - 40.0))
+		var reward_size := Vector2(minf(900.0, viewport_size.x - 96.0), minf(650.0, viewport_size.y - 64.0))
 		_set_control_rect(reward_panel, (viewport_size - reward_size) * 0.5, reward_size)
 	if menu_rules_panel != null:
 		var rules_size := Vector2(minf(860.0, viewport_size.x - 96.0), minf(620.0, viewport_size.y - 96.0))
@@ -3206,42 +3298,43 @@ func _build_relic_tooltip() -> void:
 func _build_reward_panel() -> void:
 	reward_panel = PanelContainer.new()
 	reward_panel.position = Vector2(166, 20)
-	reward_panel.custom_minimum_size = Vector2(948, 760)
+	reward_panel.custom_minimum_size = Vector2(900, 650)
 	reward_panel.visible = false
+	reward_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.018, 0.012, 0.026, 1.0), Color(1.0, 0.72, 0.22, 0.92), 3))
 	ui_layer.add_child(reward_panel)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 24)
-	margin.add_theme_constant_override("margin_right", 24)
-	margin.add_theme_constant_override("margin_top", 20)
-	margin.add_theme_constant_override("margin_bottom", 20)
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 16)
 	reward_panel.add_child(margin)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 12)
+	box.add_theme_constant_override("separation", 10)
 	margin.add_child(box)
 
-	reward_title = _new_label("", 31, Color(1.0, 0.86, 0.42))
+	reward_title = _new_label("", 25, Color(1.0, 0.86, 0.42))
 	box.add_child(reward_title)
 	reward_summary_scroll = ScrollContainer.new()
 	reward_summary_scroll.visible = false
-	reward_summary_scroll.custom_minimum_size = Vector2(860, 390)
+	reward_summary_scroll.custom_minimum_size = Vector2(820, 58)
 	reward_summary_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	reward_summary_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	box.add_child(reward_summary_scroll)
-	reward_summary_label = _new_label("", 13, Color(0.88, 0.96, 1.0))
-	reward_summary_label.custom_minimum_size = Vector2(820, 0)
+	reward_summary_label = _new_label("", 12, Color(0.88, 0.96, 1.0))
+	reward_summary_label.custom_minimum_size = Vector2(800, 0)
 	reward_summary_scroll.add_child(reward_summary_label)
 	for i in range(4):
 		var button := Button.new()
-		button.custom_minimum_size = Vector2(860, 118)
-		_set_button_font_size(button, 18)
+		button.custom_minimum_size = Vector2(820, 96)
+		_set_button_font_size(button, 19)
 		button.text = ""
 		button.pressed.connect(_on_reward_button_pressed.bind(i))
 		reward_buttons.append(button)
 		box.add_child(button)
 	continue_button = Button.new()
-	continue_button.custom_minimum_size = Vector2(860, 84)
-	_set_button_font_size(continue_button, 32)
+	continue_button.custom_minimum_size = Vector2(820, 68)
+	_set_button_font_size(continue_button, 26)
 	continue_button.text = "Continue"
 	continue_button.pressed.connect(_continue_after_panel)
 	box.add_child(continue_button)
@@ -4000,7 +4093,7 @@ func _capture_committed_pocket_entries(delta: float) -> void:
 		if pocket == null:
 			var speed: float = ball.linear_velocity.length()
 			if speed > 18.0:
-				var lookahead := clampf(speed * 0.22, BALL_RADIUS * 1.5, _board_pocket_throat_radius() * 1.95)
+				var lookahead := clampf(speed * 0.10, BALL_RADIUS * 1.1, _board_pocket_throat_radius() * 0.86)
 				var projected_pos: Vector2 = current_pos + ball.linear_velocity.normalized() * lookahead
 				pocket = _pocket_crossed_by_motion(ball, current_pos, projected_pos)
 		if pocket != null:
@@ -4036,7 +4129,7 @@ func _motion_crosses_pocket_mouth(ball, pocket, previous_pos: Vector2, current_p
 		return false
 	var pocket_pos: Vector2 = pocket.global_position
 	var capture_radius := _board_pocket_capture_radius() + BALL_RADIUS * 0.22
-	var throat_radius := _board_pocket_throat_radius() * (1.14 if _is_corner_pocket(pocket.pocket_id) else 1.08)
+	var throat_radius := _board_pocket_throat_radius() * (1.08 if _is_corner_pocket(pocket.pocket_id) else 1.02)
 	var closest_distance := _distance_point_to_segment(pocket_pos, previous_pos, current_pos)
 	var entry_dir := (pocket_pos - previous_pos).normalized()
 	if entry_dir.length() <= 0.01:
@@ -4061,10 +4154,21 @@ func _motion_has_clean_pocket_entry(ball, pocket, previous_pos: Vector2, current
 		return true
 	var alignment := travel_dir.dot(to_pocket.normalized())
 	var lateral_error := _distance_point_to_segment(pocket_pos, previous_pos, current_pos)
-	var allowance := _board_pocket_capture_radius() + BALL_RADIUS * 0.65
-	if _is_corner_pocket(pocket.pocket_id):
-		allowance += BALL_RADIUS * 0.35
-	return alignment >= 0.76 and lateral_error <= allowance
+	var allowance := _pocket_mouth_half_width(pocket)
+	return alignment >= 0.82 and lateral_error <= allowance
+
+func _pocket_mouth_half_width(pocket) -> float:
+	var base := BALL_RADIUS * (1.55 if _is_corner_pocket(pocket.pocket_id) else 1.34)
+	var board_scale := clampf(float(_board_def(selected_board_id).get("pocket_capture", 1.0)), 0.88, 1.06)
+	return base * board_scale
+
+func _pocket_lateral_error(ball, pocket) -> float:
+	var velocity: Vector2 = ball.linear_velocity
+	if velocity.length_squared() <= 0.01:
+		return 0.0
+	var to_pocket: Vector2 = pocket.global_position - ball.global_position
+	var velocity_dir := velocity.normalized()
+	return absf(velocity_dir.cross(to_pocket))
 
 func _distance_point_to_segment(point: Vector2, a: Vector2, b: Vector2) -> float:
 	var ab := b - a
@@ -4551,7 +4655,7 @@ func _can_capture_pocket(ball, pocket, forced: bool = false) -> bool:
 	var center_error: float = to_pocket.length()
 	var capture_radius := _board_pocket_capture_radius()
 	if center_error > capture_radius:
-		var clean_limit := _board_pocket_throat_radius() * (1.18 if forced else 0.78)
+		var clean_limit := _board_pocket_throat_radius() * (1.12 if forced else 0.78)
 		if center_error <= clean_limit and _is_clean_pocket_entry(ball, pocket):
 			return true
 		return false
@@ -4575,6 +4679,8 @@ func _is_clean_pocket_entry(ball, pocket) -> bool:
 	var speed: float = ball.linear_velocity.length()
 	if speed <= 24.0:
 		return distance <= _board_pocket_capture_radius()
+	if distance > _board_pocket_capture_radius() * 0.8 and _pocket_lateral_error(ball, pocket) > _pocket_mouth_half_width(pocket):
+		return false
 	var entry_dir: Vector2 = to_pocket.normalized()
 	var velocity_dir: Vector2 = ball.linear_velocity.normalized()
 	var alignment: float = velocity_dir.dot(entry_dir)
@@ -5395,9 +5501,9 @@ func _show_reward_draft(won: bool, table_unlocks: Array = []) -> void:
 		var elite_case := _table_tier(current_table) >= 2
 		var clean_gloves := relic_ids.has(&"white_gloves") and table_scratches == 0
 		var choice_count := 4 if elite_case or clean_gloves else 3
-		var summary_height := 70.0 if choice_count >= 4 else 128.0
-		reward_summary_scroll.custom_minimum_size = Vector2(860, summary_height)
-		reward_summary_label.custom_minimum_size = Vector2(820, 0)
+		var summary_height := 54.0 if choice_count >= 4 else 68.0
+		reward_summary_scroll.custom_minimum_size = Vector2(820, summary_height)
+		reward_summary_label.custom_minimum_size = Vector2(800, 0)
 		reward_summary_scroll.visible = true
 		reward_summary_label.text = _table_clear_summary(table_unlocks)
 		reward_summary_scroll.scroll_vertical = 0
@@ -5413,11 +5519,11 @@ func _show_reward_draft(won: bool, table_unlocks: Array = []) -> void:
 			var reward: Dictionary = choices[i]
 			reward_buttons[i].visible = true
 			if choice_count >= 4:
-				reward_buttons[i].custom_minimum_size = Vector2(860, 98)
-				_set_button_font_size(reward_buttons[i], 16)
+				reward_buttons[i].custom_minimum_size = Vector2(820, 78)
+				_set_button_font_size(reward_buttons[i], 17)
 			else:
-				reward_buttons[i].custom_minimum_size = Vector2(860, 118)
-				_set_button_font_size(reward_buttons[i], 18)
+				reward_buttons[i].custom_minimum_size = Vector2(820, 96)
+				_set_button_font_size(reward_buttons[i], 19)
 			reward_buttons[i].set_meta("reward", reward)
 			reward_buttons[i].text = _reward_card_text(reward, i)
 			reward_buttons[i].tooltip_text = _reward_tooltip_text(reward)
@@ -5436,27 +5542,34 @@ func _show_reward_draft(won: bool, table_unlocks: Array = []) -> void:
 
 func _table_clear_summary(table_unlocks: Array) -> String:
 	var lines: Array[String] = []
-	lines.append("House Receipt | " + _table_tier_text(current_table) + " | " + _route_progress_text())
-	lines.append("The house pays " + str(table_score) + " | Shots spent " + str(table_shots_used) + " | Shots banked " + str(shots_remaining) + " | " + _clean_table_status_text())
-	lines.append(_objective_progress_text() + " | " + _table_dossier_text())
-	lines.append("Case opened: " + _table_reward_case_text(current_table) + " | " + _reward_case_reason_text())
-	lines.append("Run stake: " + str(run_score) + " | " + _cash_status_text() + " | " + _style_status_text() + " | Rep " + str(run_health))
-	lines.append("Next pressure: " + _next_table_pressure_text())
+	lines.append(_route_progress_text() + " clear | +" + str(table_score) + " score | " + str(shots_remaining) + " shots left | " + _cash_status_text() + " | Rep " + str(run_health))
+	lines.append(_compact_next_table_pressure_text())
 	if last_summary != null and not last_summary.tags.is_empty():
-		lines.append("Last shot: " + _compact_tag_csv(last_summary.tags, 5))
-	if last_summary != null and not last_summary.breakdown.is_empty():
-		lines.append("Last payout: " + _summary_breakdown_text(last_summary, 4))
+		lines.append("Last: " + _compact_tag_csv(last_summary.tags, 4))
 	if current_table.get("objective", &"") == &"tag_trial":
 		lines.append("Trial tags earned: " + _tag_list_text(table_earned_tags))
-	if not table_notes.is_empty():
-		lines.append("House note: " + table_notes[-1])
 	if not table_unlocks.is_empty():
-		lines.append("The house opens a new drawer.")
+		var unlock_text: Array[String] = []
 		for unlock in table_unlocks:
-			lines.append(String(unlock))
-	else:
-		lines.append("No permanent drawer opened on this table.")
+			unlock_text.append(_compact_unlock_text(String(unlock)))
+		var hidden_count := maxi(0, unlock_text.size() - 2)
+		var visible_unlocks := unlock_text.slice(0, mini(2, unlock_text.size()))
+		var suffix := " +" + str(hidden_count) + " more" if hidden_count > 0 else ""
+		lines.append("Unlocked: " + " / ".join(visible_unlocks) + suffix)
 	return "\n".join(lines)
+
+func _compact_unlock_text(text: String) -> String:
+	var clean := text
+	var detail_cut := clean.find(" - ")
+	if detail_cut >= 0:
+		clean = clean.substr(0, detail_cut)
+	detail_cut = clean.find(" (")
+	if detail_cut >= 0:
+		clean = clean.substr(0, detail_cut)
+	clean = clean.replace("Board unlocked:", "Board:")
+	clean = clean.replace("Cue unlocked:", "Cue:")
+	clean = clean.replace("Relic unlocked:", "Relic:")
+	return _one_line(clean, 44)
 
 func _route_progress_text() -> String:
 	return _contract_route_name_text() + " room " + _contract_room_progress_text()
@@ -5488,6 +5601,14 @@ func _next_table_pressure_text() -> String:
 	if danger != "":
 		pieces.append(danger)
 	return " | ".join(pieces)
+
+func _compact_next_table_pressure_text() -> String:
+	var text := _next_table_pressure_text()
+	if text.begins_with("Next pressure: "):
+		text = text.substr(15)
+	if text.begins_with("Next "):
+		text = text.substr(5)
+	return "Next: " + _one_line(text, 112)
 
 func _roll_reward_choices(choice_count: int = 3) -> Array[Dictionary]:
 	var choices: Array[Dictionary] = []
@@ -5697,19 +5818,79 @@ func _reward_title(reward: Dictionary) -> String:
 			return "Reward"
 
 func _reward_card_text(reward: Dictionary, index: int) -> String:
-	var type_text := _reward_type_text(reward)
-	return "House Offer " + str(index + 1) + " - " + type_text + " | " + _reward_build_hint(reward) + "\n" + _reward_title(reward) + "\nDealer read: " + _reward_dealer_read(reward)
+	return _reward_short_title(reward) + "\n" + _one_line(_reward_effect_line(reward), 96)
 
 func _reward_tooltip_text(reward: Dictionary) -> String:
 	var lines: Array[String] = []
-	lines.append(_reward_title(reward))
+	lines.append(_reward_short_title(reward))
 	lines.append(_reward_description(reward))
-	lines.append("Dealer read: " + _reward_dealer_read(reward))
-	lines.append("Playbook: " + _reward_play_hint(reward))
-	lines.append("Why now: " + _reward_context_hint(reward))
-	lines.append("Next pressure: " + _next_table_pressure_text())
-	lines.append("Current build: " + _active_build_playbook_text())
+	lines.append("Use: " + _reward_play_hint(reward))
+	lines.append(_reward_dealer_read(reward))
+	lines.append(_compact_next_table_pressure_text())
 	return "\n".join(lines)
+
+func _reward_short_title(reward: Dictionary) -> String:
+	match reward.get("type", &""):
+		&"relic":
+			var id: StringName = reward.get("id", &"")
+			return relic_engine.get_display_name(id) + " [" + relic_engine.get_rarity_display(id) + "]"
+		&"cash":
+			return "$" + str(int(reward.get("amount", 0))) + " Cash"
+		&"chalk":
+			return _chalk_name(reward.get("id", &""))
+		&"favor":
+			match reward.get("id", &""):
+				&"rep_patch":
+					return "Buy Reputation"
+				&"style_tab":
+					return "Buy Style"
+				&"chalk_case":
+					return "Buy Chalk Case"
+		&"cue_work":
+			match reward.get("id", &""):
+				&"sighted_tip":
+					return "Sighted Tip"
+				&"loaded_wrap":
+					return "Loaded Wrap"
+				&"soft_bridge":
+					return "Soft Bridge"
+		&"contract":
+			match reward.get("id", &""):
+				&"overtime_ledger":
+					return "Overtime Ledger"
+				&"soft_house_line":
+					return "Soft House Line"
+				&"gold_skim":
+					return "Gold Skim"
+		&"purge":
+			return "Cleanse Marker"
+	return _reward_title(reward)
+
+func _reward_effect_line(reward: Dictionary) -> String:
+	match reward.get("type", &""):
+		&"relic":
+			return relic_engine.get_description(reward.get("id", &""))
+		&"cash":
+			return "Bankroll for side bets and house favors."
+		&"chalk":
+			return _chalk_description(reward.get("id", &""))
+		&"favor":
+			return _favor_description(reward)
+		&"cue_work":
+			return _cue_work_description(reward)
+		&"contract":
+			return _contract_description(reward)
+		&"purge":
+			return "Block " + str(int(reward.get("ward", 0))) + " curse hits."
+	return _reward_description(reward)
+
+func _one_line(text: String, limit: int = 96) -> String:
+	var clean := text.replace("\n", " ").strip_edges()
+	while clean.find("  ") >= 0:
+		clean = clean.replace("  ", " ")
+	if clean.length() <= limit:
+		return clean
+	return clean.substr(0, maxi(0, limit - 1)).strip_edges() + "..."
 
 func _reward_type_text(reward: Dictionary) -> String:
 	match reward.get("type", &""):
