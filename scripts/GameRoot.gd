@@ -40,6 +40,8 @@ const BUTTON_FONT_SCALE := 1.18
 const DESIGN_SIZE := Vector2(1280, 800)
 const VIEWPORT_MARGIN := 18.0
 const BETA_CONTRACT_TABLES := 5
+const STARTING_CASH := 25
+const DEBT_REP_STEP := 18
 const POCKET_CORNER_GAP := 76.0
 const POCKET_SIDE_GAP := 96.0
 const POCKET_SENSOR_RADIUS := 42.0
@@ -58,6 +60,7 @@ var state: State = State.AIMING
 var run_active := false
 var run_health := 6
 var run_cash := 0
+var run_debt := 0
 var run_style := 0
 var run_score := 0
 var run_cue_aim_bonus := 0.0
@@ -71,6 +74,8 @@ var run_table_limit := 0
 var run_contract_name := "Full Route"
 var table_index := 0
 var table_score := 0
+var table_buy_in := 0
+var table_pot := 0
 var table_shots_used := 0
 var shots_remaining := 0
 var shot_id := 0
@@ -184,6 +189,8 @@ var practice_run := false
 var chalk_inventory: Dictionary = {}
 var equipped_chalk_id: StringName = &""
 var active_shot_chalk_id: StringName = &""
+var current_side_bet: StringName = &""
+var active_shot_side_bet: StringName = &""
 var active_shot_chalk_used := false
 var active_shot_velvet_rails_used := false
 var menu_panel: PanelContainer
@@ -1359,7 +1366,7 @@ func _build_menu_rules_panel() -> void:
 	box.add_child(close_button)
 
 func _menu_rules_text() -> String:
-	return "Every table is an encounter. Clear the route before your reputation runs dry.\n\nAim from the cue ball, hold left mouse to charge, release to shoot. Right click a pocket to call it. Q/E set side English, W/S set follow or draw, and X resets spin. Softer shots are often safer than a full break.\n\nThe house pays for intent: bank shots, kicks, caroms, kiss pots, long pots, soft touches, power shots, clean pocket control, called pockets, and multi-pots all feed score tags. Style is a capped score multiplier, so stylish routes make later payouts louder.\n\n" + _tag_glossary_text() + "\n\nGold balls pay cash. Cursed balls hurt reputation unless a relic turns the curse. Bomb balls burst. Marked balls crack the Black Eight shield; once the shield breaks, damage the Eight and pot it while vulnerable.\n\nAfter a clear, choose an offer: relic, chalk, cash, cue work, table contract, Remove Curse, or House Favor. Favors spend run cash on reputation, style, or extra chalk. Cue work and contracts last for the run. Hover reward offers to see what shot pattern they want.\n\nPermanent clears unlock new cues, boards, and relics that can appear in later drafts.\n\nEsc opens the pause table."
+	return "Every table is an encounter. Clear the route before your reputation runs dry.\n\nAim from the cue ball, hold left mouse to charge, release to shoot. Right click a pocket to call it. B cycles a side bet, Q/E set side English, W/S set follow or draw, and X resets spin. Softer shots are often safer than a full break.\n\nEach room takes a buy-in and pays a pot when cleared. Missed side bets and failed rooms can push you into debt; later cash pays debt before it reaches your pocket.\n\nThe house pays for intent: bank shots, kicks, caroms, kiss pots, long pots, soft touches, power shots, clean pocket control, called pockets, and multi-pots all feed score tags. Style is a capped score multiplier, so stylish routes make later payouts louder.\n\n" + _tag_glossary_text() + "\n\nGold balls pay cash. Cursed balls hurt reputation unless a relic turns the curse. Bomb balls burst. Marked balls crack the Black Eight shield; once the shield breaks, damage the Eight and pot it while vulnerable.\n\nAfter a clear, choose an offer: relic, chalk, cash, cue work, table contract, Remove Curse, or House Favor. Favors spend run cash on reputation, style, or extra chalk. Cue work and contracts last for the run. Hover reward offers to see what shot pattern they want.\n\nPermanent clears unlock new cues, boards, and relics that can appear in later drafts.\n\nEsc opens the pause table."
 
 func _show_menu_rules() -> void:
 	if menu_rules_panel != null:
@@ -1553,7 +1560,7 @@ func _collection_status_line(unlocked: bool, selected: bool, freshly_unlocked: b
 
 func _menu_house_case_text() -> String:
 	var lines: Array[String] = []
-	lines.append("Seed " + str(next_run_seed) + " | Best " + str(best_run_score) + " | Completed " + str(runs_completed))
+	lines.append("Seed " + str(next_run_seed) + " | Stake $" + str(STARTING_CASH) + " | Best " + str(best_run_score) + " | Completed " + str(runs_completed))
 	lines.append("Equipped: " + _cue_name(selected_cue_id) + " / " + _board_name(selected_board_id) + " | " + _menu_collection_progress_text())
 	if _has_new_case_unlocks():
 		lines.append(_new_case_unlock_text(3))
@@ -1889,10 +1896,10 @@ func _pause_help_text() -> String:
 		table_text = _contract_route_name_text() + " table " + _contract_room_progress_text() + ": " + _table_tier_text(current_table) + " | " + String(current_table.get("name", "Table"))
 	var objective := _objective_progress_text() if not current_table.is_empty() else "Progress: -"
 	var mode_text := "Practice marker | " if practice_run else ""
-	return "Left mouse: hold and release to shoot | Right click: call a pocket | Q/E and W/S: English | X: reset spin\n\n" + mode_text + seed_text + " | " + table_text + " | " + _audio_settings_text() + " | " + _juice_settings_text() + "\n" + objective + "\n" + _pause_build_text() + "\n\nPress D during play to print a compact debug report to the Godot output."
+	return "Left mouse: hold and release to shoot | Right click: call a pocket | B: cycle side bet | Q/E and W/S: English | X: reset spin\n\n" + mode_text + seed_text + " | " + table_text + " | " + _audio_settings_text() + " | " + _juice_settings_text() + "\n" + objective + "\n" + _pause_build_text() + "\n\nPress D during play to print a compact debug report to the Godot output."
 
 func _pause_build_text() -> String:
-	return "Stake: " + str(run_score) + " score | $" + str(run_cash) + " | " + _style_status_text() + " | Rep " + str(run_health) + " | " + _run_pressure_text() + "\nCue: " + _cue_name(selected_cue_id) + " | " + _cue_trait_text(selected_cue_id) + "\nBoard: " + _board_name(selected_board_id) + " | " + _board_trait_text(selected_board_id) + "\n" + _run_upgrade_summary() + "\nRelics: " + _compact_relic_names(5)
+	return "Stake: " + str(run_score) + " score | " + _cash_status_text() + " | " + _style_status_text() + " | Rep " + str(run_health) + " | " + _run_pressure_text() + "\nCue: " + _cue_name(selected_cue_id) + " | " + _cue_trait_text(selected_cue_id) + "\nBoard: " + _board_name(selected_board_id) + " | " + _board_trait_text(selected_board_id) + "\n" + _run_upgrade_summary() + "\nRelics: " + _compact_relic_names(5)
 
 func _pause_beta_ledger_text() -> String:
 	var lines: Array[String] = []
@@ -3099,7 +3106,10 @@ func _start_run(is_practice: bool = false, table_limit: int = 0) -> void:
 	_save_progress()
 	reward_rng.seed = run_seed + (selected_practice_table * 7919 if practice_run else 0)
 	run_health = 6
-	run_cash = 0
+	run_cash = STARTING_CASH
+	run_debt = 0
+	current_side_bet = &""
+	active_shot_side_bet = &""
 	run_style = 0
 	run_score = 0
 	run_cue_aim_bonus = 0.0
@@ -3137,13 +3147,17 @@ func _load_table(index: int) -> void:
 	completed_current_table = false
 	failed_current_table = false
 	table_score = 0
+	table_buy_in = 0
+	table_pot = 0
 	table_shots_used = 0
 	table_notes.clear()
 	pocket_use.clear()
 	called_pocket_id = &""
 	current_shot_called_pocket_id = &""
+	active_shot_side_bet = &""
 	shots_remaining = int(current_table.get("shot_limit", 6))
 	_apply_run_contracts_to_current_table()
+	_open_table_wager()
 	shot_id = 0
 	boss_health = int(current_table.get("boss_health", 0))
 	boss_vulnerable = false
@@ -3180,6 +3194,115 @@ func _show_table_intro() -> void:
 	if shot_receipt_panel != null:
 		shot_receipt_panel.visible = false
 		shot_receipt_seconds = 0.0
+
+func _open_table_wager() -> void:
+	if practice_run:
+		table_buy_in = 0
+		table_pot = 0
+		return
+	var tier := _table_tier(current_table)
+	table_buy_in = 4 + tier * 3 + mini(table_index, 5) * 2
+	table_pot = table_buy_in * (3 + tier)
+	_apply_cash_delta(-table_buy_in)
+	table_notes.append("Buy-in $" + str(table_buy_in) + " opens a $" + str(table_pot) + " room pot")
+	print("Table wager: buy-in $", table_buy_in, " | pot $", table_pot, " | ", _cash_status_text())
+
+func _apply_cash_delta(amount: int) -> void:
+	if amount == 0:
+		return
+	if amount > 0:
+		var payout := amount
+		if run_debt > 0:
+			var paid := mini(run_debt, payout)
+			run_debt -= paid
+			payout -= paid
+		run_cash += payout
+		return
+	run_cash += amount
+	if run_cash < 0:
+		run_debt += -run_cash
+		run_cash = 0
+
+func _cash_status_text() -> String:
+	if run_debt > 0:
+		return "$" + str(run_cash) + " | Debt $" + str(run_debt)
+	return "$" + str(run_cash)
+
+func _cycle_side_bet() -> void:
+	var bets: Array[StringName] = [&"", &"called", &"bank", &"gold", &"multi"]
+	var index := bets.find(current_side_bet)
+	if index < 0:
+		current_side_bet = &"called"
+	else:
+		current_side_bet = bets[(index + 1) % bets.size()]
+	_show_float(_side_bet_status_text(), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, TABLE_RECT.size.y + RAIL_THICKNESS + 108.0), Color(1.0, 0.82, 0.36), 18)
+	_update_hud()
+	queue_redraw()
+
+func _side_bet_status_text() -> String:
+	if current_side_bet == &"":
+		return "Bet: none"
+	return "Bet " + _side_bet_name(current_side_bet) + " $" + str(_side_bet_cost(current_side_bet)) + " pays $" + str(_side_bet_payout(current_side_bet))
+
+func _side_bet_name(id: StringName) -> String:
+	match id:
+		&"called":
+			return "Called Pocket"
+		&"bank":
+			return "Bank/Kick"
+		&"gold":
+			return "Gold Ball"
+		&"multi":
+			return "Multi-pot"
+		_:
+			return "None"
+
+func _side_bet_cost(id: StringName) -> int:
+	if id == &"" or practice_run:
+		return 0
+	var base := 2 + _table_tier(current_table)
+	match id:
+		&"gold":
+			return base + 1
+		&"multi":
+			return base + 2
+		_:
+			return base
+
+func _side_bet_payout(id: StringName) -> int:
+	if id == &"":
+		return 0
+	var multiplier := 4 if id == &"multi" else 3
+	return _side_bet_cost(id) * multiplier
+
+func _side_bet_hit(summary: ShotSummary, id: StringName) -> bool:
+	match id:
+		&"called":
+			return summary.tags.has(&"CALLED_POCKET")
+		&"bank":
+			return summary.tags.has(&"BANK") or summary.tags.has(&"KICK")
+		&"gold":
+			return summary.potted_kinds.has(&"gold")
+		&"multi":
+			return summary.tags.has(&"MULTI_POT")
+		_:
+			return false
+
+func _apply_side_bet(summary: ShotSummary) -> void:
+	if active_shot_side_bet == &"" or practice_run:
+		return
+	var cost := _side_bet_cost(active_shot_side_bet)
+	var payout := _side_bet_payout(active_shot_side_bet)
+	var name := _side_bet_name(active_shot_side_bet)
+	if _side_bet_hit(summary, active_shot_side_bet):
+		summary.cash_delta += payout
+		summary.style_delta += 1
+		summary.breakdown.append("Side bet hit (" + name + "): +$" + str(payout) + ", +1 Style")
+		_show_float("SIDE BET +$" + str(payout), _shot_feedback_anchor(summary) + Vector2(0, -88), Color(1.0, 0.82, 0.28), 24)
+	else:
+		summary.cash_delta -= cost
+		summary.breakdown.append("Side bet missed (" + name + "): -$" + str(cost))
+		_show_float("BET LOST -$" + str(cost), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, -76), Color(1.0, 0.34, 0.24), 22)
 
 func _consume_table_intro_input(event: InputEvent) -> bool:
 	if table_intro_seconds <= 0.0 or table_intro_panel == null or not table_intro_panel.visible:
@@ -3615,6 +3738,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				KEY_X:
 					_reset_cue_spin()
 					return
+				KEY_B:
+					_cycle_side_bet()
+					return
 
 	if state != State.AIMING and state != State.CHARGING_SHOT:
 		return
@@ -3810,6 +3936,7 @@ func _fire_shot() -> void:
 	current_shot_aim_dir = aim_dir
 	cue_spin_contact_applied = false
 	current_shot_called_pocket_id = called_pocket_id
+	active_shot_side_bet = current_side_bet
 	var power_curve := pow(charge_t, 1.45)
 	var min_power := MIN_POWER * float(_cue_def(selected_cue_id).get("min_power", 1.0)) * maxf(0.74, 1.0 - run_cue_spin_bonus * 0.18)
 	var max_power := MAX_POWER * float(_cue_def(selected_cue_id).get("max_power", 1.0)) * (1.0 + run_cue_power_bonus)
@@ -3834,7 +3961,8 @@ func _fire_shot() -> void:
 		"chalk_id": active_shot_chalk_id,
 		"spin_x": current_shot_spin.x,
 		"spin_y": current_shot_spin.y,
-		"called_pocket_id": current_shot_called_pocket_id
+		"called_pocket_id": current_shot_called_pocket_id,
+		"side_bet": active_shot_side_bet
 	}, cue_ball.global_position))
 	for ball in _active_balls():
 		moved_start_positions[ball.ball_id] = ball.global_position
@@ -4310,12 +4438,13 @@ func _resolve_shot() -> void:
 	if active_shot_velvet_rails_used:
 		summary.breakdown.append("Velvet Rails preserved rail speed")
 	_apply_rival_intent(summary)
+	_apply_side_bet(summary)
 	last_summary = summary
 	_record_table_tags(summary)
 
 	table_score += summary.final_score
 	run_score += summary.final_score
-	run_cash = max(0, run_cash + summary.cash_delta)
+	_apply_cash_delta(summary.cash_delta)
 	run_style += summary.style_delta
 	run_health = clampi(run_health + summary.health_delta, 0, 9)
 	_show_shot_receipt(summary)
@@ -4324,6 +4453,8 @@ func _resolve_shot() -> void:
 		_show_float("+" + str(summary.final_score), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 46), Color(0.72, 1.0, 0.66), 30)
 	if summary.cash_delta > 0:
 		_show_float("+$" + str(summary.cash_delta), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5 + 120, 48), Color(1.0, 0.86, 0.24), 24)
+	elif summary.cash_delta < 0:
+		_show_float("-$" + str(abs(summary.cash_delta)), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5 + 120, 48), Color(1.0, 0.34, 0.24), 24)
 
 	_reset_cue_if_needed()
 	_check_table_end()
@@ -4803,9 +4934,13 @@ func _complete_table(summary: ShotSummary) -> void:
 		bonus_style += 1
 		table_notes.append("Runout Clear: +" + str(runout_score) + ", +$2, +1 Style")
 		_show_runout_feedback(runout_score)
+	if table_pot > 0:
+		bonus_cash += table_pot
+		table_notes.append("Room pot paid: +$" + str(table_pot))
+		table_pot = 0
 	run_score += bonus_score
 	table_score += bonus_score
-	run_cash += bonus_cash
+	_apply_cash_delta(bonus_cash)
 	run_style += bonus_style
 	for note in notes:
 		table_notes.append(String(note))
@@ -4821,7 +4956,15 @@ func _complete_table(summary: ShotSummary) -> void:
 
 func _fail_table() -> void:
 	current_log.add_event(GameplayEvent.new(GameplayEvent.Type.TABLE_FAILED, shot_id, {"table": current_table.get("id", &"")}))
+	if table_buy_in > 0:
+		var marker := maxi(2, int(ceil(float(table_buy_in) * 0.5)))
+		_apply_cash_delta(-marker)
+		table_notes.append("House marker: -$" + str(marker))
+		_show_float("MARKER -$" + str(marker), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, -74), Color(1.0, 0.30, 0.22), 24)
 	run_health = max(0, run_health - 1)
+	if run_debt >= DEBT_REP_STEP:
+		run_health = max(0, run_health - 1)
+		table_notes.append("Debt collector: -1 Rep")
 	var fail_relics := relic_engine.apply_on_table_fail(relic_ids)
 	var health_delta := int(fail_relics.get("health", 0))
 	if health_delta != 0:
@@ -4851,13 +4994,13 @@ func _record_table_ledger(cleared: bool) -> void:
 
 func _table_fail_summary() -> String:
 	var lines: Array[String] = []
-	lines.append("The felt takes 1 reputation. No offer is paid on a failed table.")
+	lines.append("The felt takes 1 reputation. Failed tables add a marker and pay no room pot.")
 	lines.append("Table dossier: " + _table_dossier_text())
 	if relic_ids.has(&"high_roller_chip"):
 		lines.append("High Roller Chip adds a second reputation loss on failed tables.")
 	lines.append(_objective_failure_line())
 	lines.append(_objective_progress_text())
-	lines.append("Table score " + str(table_score) + " | Shots used " + str(table_shots_used) + " | " + _clean_table_status_text() + " | Rep " + str(run_health) + " | Cash $" + str(run_cash))
+	lines.append("Table score " + str(table_score) + " | Shots used " + str(table_shots_used) + " | " + _clean_table_status_text() + " | Rep " + str(run_health) + " | " + _cash_status_text())
 	if last_summary != null and not last_summary.breakdown.is_empty():
 		lines.append("Last shot: " + _last_breakdown_text(3))
 	if last_summary != null and not last_summary.tags.is_empty():
@@ -5038,7 +5181,7 @@ func _table_clear_summary(table_unlocks: Array) -> String:
 	lines.append("The house pays " + str(table_score) + " | Shots spent " + str(table_shots_used) + " | Shots banked " + str(shots_remaining) + " | " + _clean_table_status_text())
 	lines.append(_objective_progress_text() + " | " + _table_dossier_text())
 	lines.append("Case opened: " + _table_reward_case_text(current_table) + " | " + _reward_case_reason_text())
-	lines.append("Run stake: " + str(run_score) + " | $" + str(run_cash) + " | " + _style_status_text() + " | Rep " + str(run_health))
+	lines.append("Run stake: " + str(run_score) + " | " + _cash_status_text() + " | " + _style_status_text() + " | Rep " + str(run_health))
 	lines.append("Next pressure: " + _next_table_pressure_text())
 	if last_summary != null and not last_summary.tags.is_empty():
 		lines.append("Last shot: " + _compact_tag_csv(last_summary.tags, 5))
@@ -5679,7 +5822,7 @@ func _apply_reward_choice(reward: Dictionary) -> void:
 			_show_float("Relic: " + relic_engine.get_display_name(id), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.86, 0.36), 24)
 		&"cash":
 			var amount := int(reward.get("amount", 0))
-			run_cash += amount
+			_apply_cash_delta(amount)
 			_show_float("+$" + str(amount), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.86, 0.24), 24)
 		&"chalk":
 			var chalk_id: StringName = reward.get("id", &"")
@@ -5690,7 +5833,7 @@ func _apply_reward_choice(reward: Dictionary) -> void:
 			if run_cash < cost:
 				_show_float("Short cash", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.34, 0.24), 24)
 				return
-			run_cash -= cost
+			_apply_cash_delta(-cost)
 			match reward.get("id", &""):
 				&"rep_patch":
 					run_health = clampi(run_health + int(reward.get("health", 0)), 0, 9)
@@ -5791,7 +5934,7 @@ func _run_end_summary(cleared_run: bool) -> String:
 	elif _is_short_contract():
 		lines.append("Short contract: table unlocks and best score are written, but full-route completion stays unclaimed.")
 	lines.append("Seed " + str(run_seed))
-	lines.append(_contract_route_name_text() + " | Rooms " + str(run_table_ledger.size()) + "/" + str(_run_table_goal_count()) + " | Score " + str(run_score) + " | Best " + str(best_run_score) + " | Cash $" + str(run_cash) + " | " + _style_status_text() + " | Rep " + str(run_health))
+	lines.append(_contract_route_name_text() + " | Rooms " + str(run_table_ledger.size()) + "/" + str(_run_table_goal_count()) + " | Score " + str(run_score) + " | Best " + str(best_run_score) + " | " + _cash_status_text() + " | " + _style_status_text() + " | Rep " + str(run_health))
 	lines.append("Cue " + _cue_name(selected_cue_id) + " | Board " + _board_name(selected_board_id))
 	lines.append(_run_upgrade_summary())
 	lines.append("")
@@ -6042,7 +6185,7 @@ func _update_hud() -> void:
 		return
 	hud_labels["title"].text = _contract_room_progress_text() + "  " + String(current_table.get("name", "Table"))
 	hud_labels["objective"].text = _objective_progress_text()
-	hud_labels["stats"].text = "Shots " + str(shots_remaining) + " | Table " + str(table_score) + " | Run " + str(run_score) + " | Rep " + str(run_health) + " | $" + str(run_cash) + " | " + _called_pocket_text() + " | " + _spin_label_text()
+	hud_labels["stats"].text = "Shots " + str(shots_remaining) + " | Table " + str(table_score) + " | Rep " + str(run_health) + " | " + _cash_status_text() + " | " + _side_bet_status_text() + " | " + _called_pocket_text()
 	hud_labels["route"].text = ""
 	hud_labels["rival"].text = ""
 	hud_labels["tags"].text = ""
@@ -6530,8 +6673,8 @@ func _draw_play_status_strip(accent: Color) -> void:
 	var strip := Rect2(TABLE_RECT.position + Vector2(0.0, TABLE_RECT.size.y + RAIL_THICKNESS + 10.0), Vector2(TABLE_RECT.size.x, 76.0))
 	draw_rect(strip, Color(0.012, 0.010, 0.018, 0.82))
 	draw_rect(strip, Color(accent.r, accent.g, accent.b, 0.44), false, 2.0)
-	var title := _contract_room_progress_text() + "  " + String(current_table.get("name", "Table")) + "  |  " + _objective_progress_text()
-	var stats := "Shots " + str(shots_remaining) + " | Table " + str(table_score) + " | Run " + str(run_score) + " | Rep " + str(run_health) + " | $" + str(run_cash) + " | " + _called_pocket_text() + " | " + _spin_label_text()
+	var title := _contract_room_progress_text() + "  " + String(current_table.get("name", "Table")) + "  |  Pot $" + str(table_pot) + "  |  " + _objective_progress_text()
+	var stats := "Shots " + str(shots_remaining) + " | Table " + str(table_score) + " | Rep " + str(run_health) + " | " + _cash_status_text() + " | " + _side_bet_status_text() + " | " + _called_pocket_text()
 	draw_string(font, strip.position + Vector2(18.0, 29.0), title, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 36.0, 24, Color(1.0, 0.90, 0.62, 0.95))
 	draw_string(font, strip.position + Vector2(18.0, 61.0), stats, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 190.0, 20, Color(0.86, 0.96, 1.0, 0.92))
 	draw_string(font, strip.position + Vector2(strip.size.x - 160.0, 61.0), "Relics " + str(relic_ids.size()), HORIZONTAL_ALIGNMENT_RIGHT, 140.0, 20, Color(1.0, 0.82, 0.36, 0.94))
