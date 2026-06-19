@@ -129,6 +129,7 @@ var run_cue_work_ids: Array[StringName] = []
 var run_contract_ids: Array[StringName] = []
 var potted_records: Array[Dictionary] = []
 var moved_start_positions: Dictionary = {}
+var pocket_trace_positions: Dictionary = {}
 var cue_contact_ids: Dictionary = {}
 var collision_cooldown: Dictionary = {}
 var pocket_use: Dictionary = {}
@@ -193,6 +194,14 @@ var current_side_bet: StringName = &""
 var active_shot_side_bet: StringName = &""
 var active_shot_chalk_used := false
 var active_shot_velvet_rails_used := false
+var browser_pocket_test_enabled := false
+var browser_pocket_test_active := false
+var browser_pocket_test_queue: Array[Dictionary] = []
+var browser_pocket_test_results: Array[String] = []
+var browser_pocket_test_case: Dictionary = {}
+var browser_pocket_test_ball = null
+var browser_pocket_test_started_at := 0.0
+var browser_pocket_test_min_distance := INF
 var menu_panel: PanelContainer
 var menu_scroll: ScrollContainer
 var menu_root: VBoxContainer
@@ -776,6 +785,166 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_layout_for_viewport)
 	_layout_for_viewport()
 	_show_main_menu()
+	call_deferred("_maybe_start_browser_pocket_test")
+
+func _maybe_start_browser_pocket_test() -> void:
+	if not _web_query_has_flag("pocket_test"):
+		return
+	browser_pocket_test_enabled = true
+	_browser_pocket_test_log("POCKET_TEST_BOOT")
+	selected_practice_table = 0
+	_start_run(true, 1)
+	browser_pocket_test_queue = _browser_pocket_test_cases()
+	browser_pocket_test_results.clear()
+	call_deferred("_start_next_browser_pocket_test")
+
+func _web_query_has_flag(flag: String) -> bool:
+	if OS.get_name() != "Web":
+		return false
+	var query := ""
+	var fragment := ""
+	query = str(JavaScriptBridge.eval("window.location.search || ''", true))
+	fragment = str(JavaScriptBridge.eval("window.location.hash || ''", true))
+	return query.contains(flag) or fragment.contains(flag)
+
+func _browser_pocket_test_log(message: String) -> void:
+	print(message)
+	if OS.get_name() != "Web":
+		return
+	var js_message := JSON.stringify(message)
+	JavaScriptBridge.eval("window.__hexPocketTestLog = window.__hexPocketTestLog || []; window.__hexPocketTestLog.push(" + js_message + "); document.title = " + JSON.stringify("HexHustler " + message.left(48)) + ";", true)
+
+func _browser_pocket_test_cases() -> Array[Dictionary]:
+	return [
+		{"name": "NW center", "pocket": &"NW", "lane": &"center"},
+		{"name": "NE center", "pocket": &"NE", "lane": &"center"},
+		{"name": "SW center", "pocket": &"SW", "lane": &"center"},
+		{"name": "SE center", "pocket": &"SE", "lane": &"center"},
+		{"name": "N center", "pocket": &"N", "lane": &"center"},
+		{"name": "S center", "pocket": &"S", "lane": &"center"},
+		{"name": "NW north rail", "pocket": &"NW", "lane": &"top"},
+		{"name": "NW west rail", "pocket": &"NW", "lane": &"left"},
+		{"name": "NE north rail", "pocket": &"NE", "lane": &"top"},
+		{"name": "NE east rail", "pocket": &"NE", "lane": &"right"},
+		{"name": "SW south rail", "pocket": &"SW", "lane": &"bottom"},
+		{"name": "SW west rail", "pocket": &"SW", "lane": &"left"},
+		{"name": "SE south rail", "pocket": &"SE", "lane": &"bottom"},
+		{"name": "SE east rail", "pocket": &"SE", "lane": &"right"}
+	]
+
+func _start_next_browser_pocket_test() -> void:
+	if not browser_pocket_test_enabled:
+		return
+	if browser_pocket_test_queue.is_empty():
+		_browser_pocket_test_log("POCKET_TEST_DONE " + " | ".join(browser_pocket_test_results))
+		state = State.AIMING
+		return
+	browser_pocket_test_case = browser_pocket_test_queue.pop_front()
+	var pocket = _pocket_by_id(StringName(browser_pocket_test_case.get("pocket", &"")))
+	if pocket == null:
+		browser_pocket_test_results.append(String(browser_pocket_test_case.get("name", "?")) + ":FAIL no pocket")
+		call_deferred("_start_next_browser_pocket_test")
+		return
+	_prepare_browser_pocket_test_shot(pocket, StringName(browser_pocket_test_case.get("lane", &"center")))
+
+func _prepare_browser_pocket_test_shot(pocket, lane: StringName) -> void:
+	_clear_balls_for_browser_pocket_test()
+	potted_records.clear()
+	moved_start_positions.clear()
+	pocket_trace_positions.clear()
+	cue_contact_ids.clear()
+	collision_cooldown.clear()
+	current_log = ShotEventLog.new()
+	shot_id += 1
+	shot_seconds = 0.0
+	settle_frames = 0
+	table_shots_used += 1
+	shots_remaining = 99
+	var shot := _browser_pocket_test_vectors(pocket, lane)
+	var start: Vector2 = shot.get("start", TABLE_RECT.get_center())
+	var velocity: Vector2 = shot.get("velocity", Vector2.ZERO)
+	browser_pocket_test_ball = _spawn_ball({
+		"id": StringName("pocket_test_" + String(pocket.pocket_id) + "_" + String(lane)),
+		"kind": &"normal",
+		"pos": start,
+		"score": 100,
+		"color": Color(0.78, 0.96, 1.0),
+		"radius": BALL_RADIUS
+	})
+	browser_pocket_test_ball.redirect_active(start, velocity, 0.0)
+	moved_start_positions[browser_pocket_test_ball.ball_id] = start
+	pocket_trace_positions[browser_pocket_test_ball.ball_id] = start
+	current_log.begin_shot(shot_id)
+	current_log.add_event(GameplayEvent.new(GameplayEvent.Type.SHOT_STARTED, shot_id, {
+		"power": velocity.length(),
+		"pocket_test": true,
+		"pocket_id": pocket.pocket_id,
+		"lane": lane
+	}, start))
+	state = State.SHOT_IN_MOTION
+	browser_pocket_test_active = true
+	browser_pocket_test_started_at = 0.0
+	browser_pocket_test_min_distance = INF
+	_browser_pocket_test_log("POCKET_TEST_CASE " + String(browser_pocket_test_case.get("name", "?")) + " start=" + str(start.round()) + " speed=" + str(int(round(velocity.length()))))
+
+func _clear_balls_for_browser_pocket_test() -> void:
+	for child in balls.get_children():
+		if child is PoolBall:
+			child.pot()
+		balls.remove_child(child)
+		child.free()
+	cue_ball = null
+	boss_ball = null
+
+func _browser_pocket_test_vectors(pocket, lane: StringName) -> Dictionary:
+	var pos: Vector2 = pocket.global_position
+	var speed := 560.0
+	var start := TABLE_RECT.get_center()
+	match lane:
+		&"top":
+			start = Vector2(pos.x + (150.0 if String(pocket.pocket_id) == "NW" else -150.0), TABLE_RECT.position.y + BALL_RADIUS + 8.0)
+		&"bottom":
+			start = Vector2(pos.x + (150.0 if String(pocket.pocket_id) == "SW" else -150.0), TABLE_RECT.end.y - BALL_RADIUS - 8.0)
+		&"left":
+			start = Vector2(TABLE_RECT.position.x + BALL_RADIUS + 8.0, pos.y + (150.0 if String(pocket.pocket_id) == "NW" else -150.0))
+		&"right":
+			start = Vector2(TABLE_RECT.end.x - BALL_RADIUS - 8.0, pos.y + (150.0 if String(pocket.pocket_id) == "NE" else -150.0))
+		_:
+			var from_center := (pos - TABLE_RECT.get_center()).normalized()
+			start = pos - from_center * 210.0
+	start = _clamp_ball_inside_table(start, BALL_RADIUS + 8.0)
+	var dir := (pos - start).normalized()
+	if dir.length() <= 0.01:
+		dir = Vector2.RIGHT
+	return {"start": start, "velocity": dir * speed}
+
+func _update_browser_pocket_test(delta: float) -> void:
+	if not browser_pocket_test_active:
+		return
+	browser_pocket_test_started_at += delta
+	var case_name := String(browser_pocket_test_case.get("name", "?"))
+	if browser_pocket_test_ball == null or not is_instance_valid(browser_pocket_test_ball):
+		browser_pocket_test_results.append(case_name + ":FAIL missing ball")
+		browser_pocket_test_active = false
+		call_deferred("_start_next_browser_pocket_test")
+		return
+	var target_pocket = _pocket_by_id(StringName(browser_pocket_test_case.get("pocket", &"")))
+	if target_pocket != null:
+		browser_pocket_test_min_distance = minf(browser_pocket_test_min_distance, browser_pocket_test_ball.global_position.distance_to(target_pocket.global_position))
+	if browser_pocket_test_ball.potted:
+		browser_pocket_test_results.append(case_name + ":PASS")
+		_browser_pocket_test_log("POCKET_TEST_PASS " + case_name)
+		browser_pocket_test_active = false
+		call_deferred("_start_next_browser_pocket_test")
+		return
+	if browser_pocket_test_started_at >= 2.6 or state != State.SHOT_IN_MOTION:
+		var pos: Vector2 = browser_pocket_test_ball.global_position
+		var vel: Vector2 = browser_pocket_test_ball.linear_velocity
+		var recent := _recent_event_lines(8).replace("\n", " / ")
+		browser_pocket_test_results.append(case_name + ":FAIL pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))))
+		_browser_pocket_test_log("POCKET_TEST_FAIL " + case_name + " pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " recent=" + recent)
+		browser_pocket_test_active = false
+		call_deferred("_start_next_browser_pocket_test")
 
 func _build_world() -> void:
 	world = Node2D.new()
@@ -3362,11 +3531,13 @@ func _build_rails() -> void:
 		rails.add_child(body)
 	_build_corner_jaws()
 	var corner_stop := RAIL_THICKNESS + TABLE_BACKSTOP_THICKNESS
+	var mouth_relief := BALL_RADIUS + 18.0
+	var corner_guard := maxf(12.0, corner_stop - mouth_relief)
 	var corner_backstop_rects := [
-		{"id": &"NW", "rect": Rect2(left - corner_stop, top - corner_stop, corner_stop, corner_stop)},
-		{"id": &"NE", "rect": Rect2(right, top - corner_stop, corner_stop, corner_stop)},
-		{"id": &"SW", "rect": Rect2(left - corner_stop, bottom, corner_stop, corner_stop)},
-		{"id": &"SE", "rect": Rect2(right, bottom, corner_stop, corner_stop)}
+		{"id": &"NW", "rect": Rect2(left - corner_stop, top - corner_stop, corner_guard, corner_guard)},
+		{"id": &"NE", "rect": Rect2(right + mouth_relief, top - corner_stop, corner_guard, corner_guard)},
+		{"id": &"SW", "rect": Rect2(left - corner_stop, bottom + mouth_relief, corner_guard, corner_guard)},
+		{"id": &"SE", "rect": Rect2(right + mouth_relief, bottom + mouth_relief, corner_guard, corner_guard)}
 	]
 	for data in corner_backstop_rects:
 		var body := StaticBody2D.new()
@@ -3388,10 +3559,12 @@ func _build_rails() -> void:
 		rails.add_child(body)
 	var apron := RAIL_THICKNESS + TABLE_BACKSTOP_THICKNESS
 	var backstop_rects := [
-		{"id": &"N", "rect": Rect2(left - apron, top - apron, TABLE_RECT.size.x + apron * 2.0, TABLE_BACKSTOP_THICKNESS)},
-		{"id": &"S", "rect": Rect2(left - apron, bottom + RAIL_THICKNESS, TABLE_RECT.size.x + apron * 2.0, TABLE_BACKSTOP_THICKNESS)},
-		{"id": &"W", "rect": Rect2(left - apron, top - apron, TABLE_BACKSTOP_THICKNESS, TABLE_RECT.size.y + apron * 2.0)},
-		{"id": &"E", "rect": Rect2(right + RAIL_THICKNESS, top - apron, TABLE_BACKSTOP_THICKNESS, TABLE_RECT.size.y + apron * 2.0)}
+		{"id": &"N1", "rect": Rect2(left + POCKET_CORNER_GAP, top - apron, mid_x - left - POCKET_CORNER_GAP - POCKET_SIDE_GAP * 0.5, TABLE_BACKSTOP_THICKNESS)},
+		{"id": &"N2", "rect": Rect2(mid_x + POCKET_SIDE_GAP * 0.5, top - apron, right - mid_x - POCKET_CORNER_GAP - POCKET_SIDE_GAP * 0.5, TABLE_BACKSTOP_THICKNESS)},
+		{"id": &"S1", "rect": Rect2(left + POCKET_CORNER_GAP, bottom + RAIL_THICKNESS, mid_x - left - POCKET_CORNER_GAP - POCKET_SIDE_GAP * 0.5, TABLE_BACKSTOP_THICKNESS)},
+		{"id": &"S2", "rect": Rect2(mid_x + POCKET_SIDE_GAP * 0.5, bottom + RAIL_THICKNESS, right - mid_x - POCKET_CORNER_GAP - POCKET_SIDE_GAP * 0.5, TABLE_BACKSTOP_THICKNESS)},
+		{"id": &"W", "rect": Rect2(left - apron, top + POCKET_CORNER_GAP, TABLE_BACKSTOP_THICKNESS, TABLE_RECT.size.y - POCKET_CORNER_GAP * 2.0)},
+		{"id": &"E", "rect": Rect2(right + RAIL_THICKNESS, top + POCKET_CORNER_GAP, TABLE_BACKSTOP_THICKNESS, TABLE_RECT.size.y - POCKET_CORNER_GAP * 2.0)}
 	]
 	for data in backstop_rects:
 		var body := StaticBody2D.new()
@@ -3800,10 +3973,11 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
-	_capture_committed_pocket_entries()
+	_capture_committed_pocket_entries(delta)
 	_handle_out_of_bounds_balls()
 	_apply_table_zone_effects(delta)
 	_limit_ball_speeds()
+	_update_browser_pocket_test(delta)
 	if state != State.SHOT_IN_MOTION:
 		return
 	shot_seconds += delta
@@ -3814,22 +3988,98 @@ func _physics_process(delta: float) -> void:
 	if settle_frames >= SETTLE_FRAMES_NEEDED or shot_seconds >= MAX_SHOT_SECONDS:
 		_resolve_shot()
 
-func _capture_committed_pocket_entries() -> void:
+func _capture_committed_pocket_entries(delta: float) -> void:
 	if state != State.SHOT_IN_MOTION:
 		return
 	for ball in _active_balls():
 		if ball.potted:
 			continue
-		var pocket = _nearest_pocket(ball.global_position)
-		if pocket != null and _is_committed_to_pocket(ball, pocket):
+		var current_pos: Vector2 = ball.global_position
+		var previous_pos: Vector2 = pocket_trace_positions.get(ball.ball_id, current_pos)
+		var pocket = _pocket_crossed_by_motion(ball, previous_pos, current_pos)
+		if pocket == null:
+			var speed: float = ball.linear_velocity.length()
+			if speed > 18.0:
+				var lookahead := clampf(speed * 0.22, BALL_RADIUS * 1.5, _board_pocket_throat_radius() * 1.95)
+				var projected_pos: Vector2 = current_pos + ball.linear_velocity.normalized() * lookahead
+				pocket = _pocket_crossed_by_motion(ball, current_pos, projected_pos)
+		if pocket != null:
 			on_pocket_entered(ball, pocket, true)
+			continue
+		else:
+			pocket = _nearest_pocket(current_pos)
+			if pocket != null and _is_committed_to_pocket(ball, pocket):
+				on_pocket_entered(ball, pocket, true)
+				continue
+		pocket_trace_positions[ball.ball_id] = current_pos
+
+func _pocket_crossed_by_motion(ball, previous_pos: Vector2, current_pos: Vector2):
+	if previous_pos.distance_squared_to(current_pos) <= 0.01:
+		return null
+	var best = null
+	var best_distance := INF
+	for pocket in pockets.get_children():
+		if not (pocket is PocketArea):
+			continue
+		if not _motion_crosses_pocket_mouth(ball, pocket, previous_pos, current_pos):
+			continue
+		var distance := _distance_point_to_segment(pocket.global_position, previous_pos, current_pos)
+		if distance < best_distance:
+			best = pocket
+			best_distance = distance
+	return best
+
+func _motion_crosses_pocket_mouth(ball, pocket, previous_pos: Vector2, current_pos: Vector2) -> bool:
+	var motion := current_pos - previous_pos
+	var speed: float = ball.linear_velocity.length()
+	if motion.length_squared() <= 0.01 or speed <= 18.0:
+		return false
+	var pocket_pos: Vector2 = pocket.global_position
+	var capture_radius := _board_pocket_capture_radius() + BALL_RADIUS * 0.22
+	var throat_radius := _board_pocket_throat_radius() * (1.14 if _is_corner_pocket(pocket.pocket_id) else 1.08)
+	var closest_distance := _distance_point_to_segment(pocket_pos, previous_pos, current_pos)
+	var entry_dir := (pocket_pos - previous_pos).normalized()
+	if entry_dir.length() <= 0.01:
+		entry_dir = (pocket_pos - current_pos).normalized()
+	var toward_speed: float = ball.linear_velocity.dot(entry_dir)
+	if toward_speed < maxf(28.0, speed * 0.18):
+		return false
+	if closest_distance <= capture_radius:
+		return true
+	if closest_distance > throat_radius:
+		return false
+	return _motion_has_clean_pocket_entry(ball, pocket, previous_pos, current_pos)
+
+func _motion_has_clean_pocket_entry(ball, pocket, previous_pos: Vector2, current_pos: Vector2) -> bool:
+	var pocket_pos: Vector2 = pocket.global_position
+	var travel := current_pos - previous_pos
+	if travel.length_squared() <= 0.01:
+		return false
+	var travel_dir := travel.normalized()
+	var to_pocket := pocket_pos - previous_pos
+	if to_pocket.length_squared() <= 0.01:
+		return true
+	var alignment := travel_dir.dot(to_pocket.normalized())
+	var lateral_error := _distance_point_to_segment(pocket_pos, previous_pos, current_pos)
+	var allowance := _board_pocket_capture_radius() + BALL_RADIUS * 0.65
+	if _is_corner_pocket(pocket.pocket_id):
+		allowance += BALL_RADIUS * 0.35
+	return alignment >= 0.76 and lateral_error <= allowance
+
+func _distance_point_to_segment(point: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var ab_len_sq := ab.length_squared()
+	if ab_len_sq <= 0.01:
+		return point.distance_to(a)
+	var t := clampf((point - a).dot(ab) / ab_len_sq, 0.0, 1.0)
+	return point.distance_to(a + ab * t)
 
 func _is_committed_to_pocket(ball, pocket) -> bool:
 	var to_pocket: Vector2 = pocket.global_position - ball.global_position
 	var distance := to_pocket.length()
 	if distance <= _board_pocket_capture_radius():
 		return _can_capture_pocket(ball, pocket, false)
-	if distance > _board_pocket_throat_radius() * 0.92:
+	if distance > _board_pocket_throat_radius() * 1.18:
 		return false
 	if not _is_clean_pocket_entry(ball, pocket):
 		return false
@@ -3950,6 +4200,7 @@ func _fire_shot() -> void:
 	shots_remaining -= 1
 	potted_records.clear()
 	moved_start_positions.clear()
+	pocket_trace_positions.clear()
 	cue_contact_ids.clear()
 	collision_cooldown.clear()
 	settle_frames = 0
@@ -3966,6 +4217,7 @@ func _fire_shot() -> void:
 	}, cue_ball.global_position))
 	for ball in _active_balls():
 		moved_start_positions[ball.ball_id] = ball.global_position
+		pocket_trace_positions[ball.ball_id] = ball.global_position
 
 	var launch_impulse := aim_dir * power
 	var spin_power := 1.0 + run_cue_spin_bonus
@@ -4026,7 +4278,7 @@ func on_ball_body_contact(ball, body: Node, speed: float) -> void:
 	elif body.is_in_group("rail"):
 		var rail_id: StringName = body.get_meta("rail_id", &"rail")
 		var pocket = _nearest_pocket(ball.global_position)
-		if pocket != null and String(rail_id).contains("_") and _is_committed_to_pocket(ball, pocket):
+		if pocket != null and String(rail_id).contains("_") and (_is_committed_to_pocket(ball, pocket) or _motion_crosses_pocket_mouth(ball, pocket, pocket_trace_positions.get(ball.ball_id, ball.global_position), ball.global_position)):
 			on_pocket_entered(ball, pocket, true)
 			return
 		current_log.add_event(GameplayEvent.new(GameplayEvent.Type.RAIL_HIT, shot_id, {
@@ -4053,7 +4305,11 @@ func on_ball_body_contact(ball, body: Node, speed: float) -> void:
 			ball.angular_velocity *= 1.08
 			_show_float("RAIL CHALK", ball.global_position + Vector2(0, -34), Color(0.62, 0.9, 1.0), 17)
 	elif body.is_in_group("backstop"):
-		_return_ball_to_table(ball)
+		var pocket = _nearest_pocket(ball.global_position)
+		if pocket != null and (_is_committed_to_pocket(ball, pocket) or _motion_crosses_pocket_mouth(ball, pocket, pocket_trace_positions.get(ball.ball_id, ball.global_position), ball.global_position)):
+			on_pocket_entered(ball, pocket, true)
+		else:
+			_return_ball_to_table(ball)
 	elif body.is_in_group("bumper"):
 		var away: Vector2 = (ball.global_position - body.global_position).normalized()
 		if away.length() <= 0.01:
@@ -4114,6 +4370,7 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 			"pocket_id": pocket.pocket_id
 		}, pocket.global_position))
 		ball.pot()
+		pocket_trace_positions.erase(ball.ball_id)
 		_show_float("SCRATCH", pocket.global_position + Vector2(0, -22), Color(1.0, 0.18, 0.22), 24)
 		_play_audio_cue(&"scratch")
 		shake_amount = maxf(shake_amount, 8.0)
@@ -4137,6 +4394,7 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 			return
 
 	ball.pot()
+	pocket_trace_positions.erase(ball.ball_id)
 	potted_count_this_table += 1
 	if ball.kind == &"gold":
 		gold_potted_this_table += 1
@@ -4293,7 +4551,8 @@ func _can_capture_pocket(ball, pocket, forced: bool = false) -> bool:
 	var center_error: float = to_pocket.length()
 	var capture_radius := _board_pocket_capture_radius()
 	if center_error > capture_radius:
-		if center_error <= _board_pocket_throat_radius() * 0.78 and _is_clean_pocket_entry(ball, pocket):
+		var clean_limit := _board_pocket_throat_radius() * (1.18 if forced else 0.78)
+		if center_error <= clean_limit and _is_clean_pocket_entry(ball, pocket):
 			return true
 		return false
 	if forced:

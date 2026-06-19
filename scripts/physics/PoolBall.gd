@@ -36,7 +36,7 @@ func setup(config: Dictionary, table_ref: Node) -> void:
 	contact_monitor = true
 	max_contacts_reported = 12
 	collision_layer = 1
-	collision_mask = 1 | 2
+	collision_mask = 1 | 2 | 4
 	lock_rotation = false
 	add_to_group("balls")
 	_rebuild_shape()
@@ -77,7 +77,7 @@ func restore_at(pos: Vector2) -> void:
 	visible = true
 	freeze = false
 	collision_layer = 1
-	collision_mask = 1 | 2
+	collision_mask = 1 | 2 | 4
 	global_position = pos
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
