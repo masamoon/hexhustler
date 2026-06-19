@@ -42,11 +42,11 @@ const VIEWPORT_MARGIN := 18.0
 const BETA_CONTRACT_TABLES := 5
 const POCKET_CORNER_GAP := 76.0
 const POCKET_SIDE_GAP := 96.0
-const POCKET_SENSOR_RADIUS := 34.0
-const POCKET_CAPTURE_RADIUS := 28.0
+const POCKET_SENSOR_RADIUS := 42.0
+const POCKET_CAPTURE_RADIUS := 36.0
 const OUT_OF_BOUNDS_MARGIN := 30.0
 const TABLE_BACKSTOP_THICKNESS := 28.0
-const POCKET_THROAT_RADIUS := 56.0
+const POCKET_THROAT_RADIUS := 72.0
 const POCKET_ESCAPE_DEPTH := 18.0
 const CORNER_MOUTH_RETURN_RADIUS := 82.0
 const SPAWN_CLEARANCE := 48.0
@@ -872,7 +872,7 @@ func _layout_play_camera(viewport_size: Vector2) -> void:
 	if camera == null:
 		return
 	var table_bounds := TABLE_RECT.grow(RAIL_THICKNESS + 22.0)
-	table_bounds.size.y += 64.0
+	table_bounds.size.y += 112.0
 	var reserved_top := 18.0
 	var reserved_bottom := 18.0
 	var available := Rect2(
@@ -1113,14 +1113,15 @@ func _build_main_menu() -> void:
 	menu_root.add_theme_constant_override("separation", 12)
 	menu_scroll.add_child(menu_root)
 
-	var title := _new_label("HexHustler", 38, Color(1.0, 0.82, 0.28))
+	var title := _new_label("HexHustler", 30, Color(1.0, 0.82, 0.28))
 	menu_root.add_child(title)
-	var subtitle := _new_label("Cursed tables. Drafted relics. One clean shot away from ruin.", 15, Color(0.82, 0.92, 0.95))
+	var subtitle := _new_label("Cursed tables. Drafted relics. One clean shot away from ruin.", 12, Color(0.82, 0.92, 0.95))
 	menu_root.add_child(subtitle)
 
-	menu_summary = _new_label("", 14, Color(0.98, 0.9, 0.72))
+	menu_summary = _new_label("", 11, Color(0.98, 0.9, 0.72))
 	menu_root.add_child(menu_summary)
 	_build_menu_loadout_preview(menu_root)
+	menu_loadout_panel.visible = false
 
 	var columns := HBoxContainer.new()
 	columns.add_theme_constant_override("separation", 18)
@@ -1134,9 +1135,7 @@ func _build_main_menu() -> void:
 	menu_board_list = board_box.get_node("Scroll/List") as VBoxContainer
 	columns.add_child(board_box)
 
-	var relic_box := _menu_relic_column()
-	menu_relic_list = relic_box.get_node("Scroll/List") as VBoxContainer
-	columns.add_child(relic_box)
+	menu_relic_list = null
 
 	var menu_actions := HBoxContainer.new()
 	menu_actions.add_theme_constant_override("separation", 14)
@@ -1418,16 +1417,16 @@ func _rebuild_menu_cards(list: VBoxContainer, defs: Dictionary, unlocked_ids: Ar
 		var card_width := 338.0
 		if parent_control != null:
 			card_width = max(316.0, parent_control.custom_minimum_size.x - 22.0)
-		button.custom_minimum_size = Vector2(card_width, 112)
+		button.custom_minimum_size = Vector2(card_width, 74)
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_set_button_font_size(button, 14)
 		var trait_text := _cue_trait_text(id) if is_cue else _board_trait_text(id)
 		var visual_text := _cue_visual_line(id) if is_cue else _board_visual_line(id)
 		var status_text := _collection_status_line(unlocked, id == selected_id, freshly_unlocked)
-		var label := status_text + "  " + String(def.get("name", id)) + "\n" + String(def.get("text", "")) + "\n" + visual_text + "\n" + trait_text
+		var label := status_text + "  " + String(def.get("name", id)) + "\n" + (_cue_play_hint(id) if is_cue else _board_play_hint(id))
 		button.tooltip_text = String(def.get("name", id)) + "\n" + String(def.get("text", "")) + "\n" + visual_text + "\n" + trait_text + "\nPlaybook: " + (_cue_play_hint(id) if is_cue else _board_play_hint(id))
 		if not unlocked:
-			label = _collection_status_line(false, false, false) + "  " + String(def.get("name", id)) + "\nMarker: " + String(def.get("unlock", "Locked")) + "\n" + visual_text + "\n" + trait_text
+			label = _collection_status_line(false, false, false) + "  " + String(def.get("name", id)) + "\nMarker: " + String(def.get("unlock", "Locked"))
 			button.disabled = true
 			button.tooltip_text = String(def.get("name", id)) + "\nMarker: " + String(def.get("unlock", "Locked")) + "\n" + visual_text + "\n" + trait_text + "\nPlaybook: " + (_cue_play_hint(id) if is_cue else _board_play_hint(id))
 		button.text = label
@@ -1442,7 +1441,7 @@ func _rebuild_menu_cards(list: VBoxContainer, defs: Dictionary, unlocked_ids: Ar
 			card_fill = card_fill.lightened(0.14)
 			normal_border = Color(1.0, 0.82, 0.24, 0.96)
 			border_width = 3
-			button.custom_minimum_size.y = 124
+			button.custom_minimum_size.y = 84
 			button.tooltip_text = status_text + "\n" + button.tooltip_text
 		elif freshly_unlocked:
 			card_fill = card_fill.lightened(0.10)
@@ -1554,16 +1553,10 @@ func _collection_status_line(unlocked: bool, selected: bool, freshly_unlocked: b
 
 func _menu_house_case_text() -> String:
 	var lines: Array[String] = []
-	lines.append("House Case | Seed " + str(next_run_seed) + " | " + _menu_collection_progress_text())
-	if last_run_seed > 0:
-		lines.append("Last seed: " + str(last_run_seed))
-	lines.append("Equipped: " + _cue_name(selected_cue_id) + " on " + _board_name(selected_board_id))
-	lines.append(_cue_trait_text(selected_cue_id) + " | " + _board_trait_text(selected_board_id))
-	lines.append("Loadout wants: " + _cue_play_hint(selected_cue_id) + " | " + _board_play_hint(selected_board_id))
-	lines.append("Record: Best " + str(best_run_score) + " | Completed " + str(runs_completed) + " | Chalk " + _chalk_inventory_text())
+	lines.append("Seed " + str(next_run_seed) + " | Best " + str(best_run_score) + " | Completed " + str(runs_completed))
+	lines.append("Equipped: " + _cue_name(selected_cue_id) + " / " + _board_name(selected_board_id) + " | " + _menu_collection_progress_text())
 	if _has_new_case_unlocks():
-		lines.append(_new_case_unlock_text(7))
-	lines.append(_menu_next_marks_text())
+		lines.append(_new_case_unlock_text(3))
 	return "\n".join(lines)
 
 func _beta_contract_text(context: String = "run") -> String:
@@ -3181,14 +3174,9 @@ func _load_table(index: int) -> void:
 func _show_table_intro() -> void:
 	if table_intro_panel == null:
 		return
-	var modifier_text := String(current_table.get("modifier_text", _modifier_display_text(current_table.get("modifier", &""))))
-	var table_number := "Table " + _contract_room_progress_text()
-	table_intro_title.text = table_number + "  |  " + _table_tier_text(current_table) + "  |  " + String(current_table.get("name", "Table"))
-	table_intro_body.text = String(current_table.get("biome", "")) + "\n" + _table_dossier_text() + "\n" + _table_piece_dossier_text(current_table) + "\n" + String(current_table.get("objective_text", "")) + "\n" + _objective_progress_text() + "\n" + _table_tier_rule_text(current_table) + "\n" + modifier_text + "\n" + _table_unlock_preview_text(StringName(current_table.get("id", &"")))
-	table_intro_footer.text = "Cue: " + _cue_name(selected_cue_id) + " | " + _cue_trait_text(selected_cue_id) + "\nBoard: " + _board_name(selected_board_id) + " | " + _board_trait_text(selected_board_id) + " | " + _run_upgrade_summary() + "\n" + _table_opening_read_text(current_table)
-	table_intro_panel.modulate = Color(1, 1, 1, 1)
-	table_intro_panel.visible = true
-	table_intro_seconds = 4.2
+	table_intro_panel.visible = false
+	table_intro_seconds = 0.0
+	print("Table intro: ", _contract_room_progress_text(), " ", String(current_table.get("name", "Table")), " | ", _objective_progress_text(), " | ", _table_dossier_text())
 	if shot_receipt_panel != null:
 		shot_receipt_panel.visible = false
 		shot_receipt_seconds = 0.0
@@ -4190,8 +4178,6 @@ func _can_capture_pocket(ball, pocket, forced: bool = false) -> bool:
 		return false
 	if _is_clean_pocket_entry(ball, pocket):
 		return true
-	if speed > 620.0 and center_error > capture_radius * 0.62:
-		return false
 	return true
 
 func _is_clean_pocket_entry(ball, pocket) -> bool:
@@ -4209,11 +4195,11 @@ func _is_clean_pocket_entry(ball, pocket) -> bool:
 	if toward_speed < maxf(30.0, speed * 0.24):
 		return false
 	var throat: float = _board_pocket_throat_radius()
-	var alignment_floor := 0.48
+	var alignment_floor := 0.36
 	if distance <= throat * 0.62:
-		alignment_floor = 0.30
+		alignment_floor = 0.18
 	elif speed > 700.0:
-		alignment_floor = 0.58
+		alignment_floor = 0.42
 	return alignment >= alignment_floor
 
 func _return_ball_to_table(ball) -> void:
@@ -6541,14 +6527,14 @@ func _draw_play_status_strip(accent: Color) -> void:
 	if current_table.is_empty():
 		return
 	var font := ThemeDB.fallback_font
-	var strip := Rect2(TABLE_RECT.position + Vector2(0.0, TABLE_RECT.size.y + RAIL_THICKNESS + 8.0), Vector2(TABLE_RECT.size.x, 44.0))
+	var strip := Rect2(TABLE_RECT.position + Vector2(0.0, TABLE_RECT.size.y + RAIL_THICKNESS + 10.0), Vector2(TABLE_RECT.size.x, 76.0))
 	draw_rect(strip, Color(0.012, 0.010, 0.018, 0.82))
 	draw_rect(strip, Color(accent.r, accent.g, accent.b, 0.44), false, 2.0)
 	var title := _contract_room_progress_text() + "  " + String(current_table.get("name", "Table")) + "  |  " + _objective_progress_text()
 	var stats := "Shots " + str(shots_remaining) + " | Table " + str(table_score) + " | Run " + str(run_score) + " | Rep " + str(run_health) + " | $" + str(run_cash) + " | " + _called_pocket_text() + " | " + _spin_label_text()
-	draw_string(font, strip.position + Vector2(14.0, 18.0), title, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 28.0, 15, Color(1.0, 0.90, 0.62, 0.95))
-	draw_string(font, strip.position + Vector2(14.0, 37.0), stats, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 160.0, 14, Color(0.86, 0.96, 1.0, 0.92))
-	draw_string(font, strip.position + Vector2(strip.size.x - 132.0, 37.0), "Relics " + str(relic_ids.size()), HORIZONTAL_ALIGNMENT_RIGHT, 118.0, 14, Color(1.0, 0.82, 0.36, 0.94))
+	draw_string(font, strip.position + Vector2(18.0, 29.0), title, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 36.0, 24, Color(1.0, 0.90, 0.62, 0.95))
+	draw_string(font, strip.position + Vector2(18.0, 61.0), stats, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 190.0, 20, Color(0.86, 0.96, 1.0, 0.92))
+	draw_string(font, strip.position + Vector2(strip.size.x - 160.0, 61.0), "Relics " + str(relic_ids.size()), HORIZONTAL_ALIGNMENT_RIGHT, 140.0, 20, Color(1.0, 0.82, 0.36, 0.94))
 
 func _rail_rect_for_id(id: StringName) -> Rect2:
 	var left := TABLE_RECT.position.x
