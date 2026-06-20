@@ -271,6 +271,7 @@ var fire_trail_emit_accum := 0.0
 var score_trail_bursts: Array[Dictionary] = []
 var live_travel_score_shown: Dictionary = {}
 var live_score_ticks: Array[Dictionary] = []
+var score_side_feed: Array[Dictionary] = []
 var relic_field_cooldowns: Dictionary = {}
 var last_ball_drama_active := false
 var last_ball_drama_linger := 0.0
@@ -786,7 +787,7 @@ var tables: Array[Dictionary] = [
 		"shot_limit": 6,
 		"gold_expires_after": 4,
 		"modifier": &"gold_rush",
-		"modifier_text": "Unpotted gold expires after shot 4; the cashier strip drains speed.",
+		"modifier_text": "Unpotted gold expires after shot 4; the cashier strip slows rolling balls without killing the shot.",
 		"zones": [
 			{"id": &"sticky_cashier", "kind": &"sticky", "rect": Rect2(606, 300, 338, 216), "strength": 0.48}
 		],
@@ -1122,6 +1123,7 @@ func _prepare_browser_pocket_test_shot(pocket, lane: StringName, speed: float = 
 	ball_travel_last_positions.clear()
 	live_travel_score_shown.clear()
 	live_score_ticks.clear()
+	score_side_feed.clear()
 	ball_trail_histories.clear()
 	pocket_reject_cooldown.clear()
 	cue_contact_ids.clear()
@@ -1283,6 +1285,7 @@ func _prepare_browser_aim_test_shot(test_case: Dictionary) -> void:
 	ball_travel_last_positions.clear()
 	live_travel_score_shown.clear()
 	live_score_ticks.clear()
+	score_side_feed.clear()
 	ball_trail_histories.clear()
 	pocket_reject_cooldown.clear()
 	cue_contact_ids.clear()
@@ -1807,8 +1810,12 @@ func _layout_overlay_panels(viewport_size: Vector2) -> void:
 		var size := Vector2(minf(820.0, viewport_size.x - 96.0), minf(250.0, viewport_size.y - 96.0))
 		_set_control_rect(table_intro_panel, (viewport_size - size) * 0.5, size)
 	if shot_receipt_panel != null:
-		var receipt_size := Vector2(minf(760.0, viewport_size.x - 96.0), 124.0)
-		_set_control_rect(shot_receipt_panel, Vector2((viewport_size.x - receipt_size.x) * 0.5, viewport_size.y - receipt_size.y - 28.0), receipt_size)
+		var receipt_size := Vector2(minf(322.0, viewport_size.x - 48.0), 168.0)
+		var receipt_pos := Vector2(24.0, 142.0)
+		if viewport_size.x < 860.0:
+			receipt_size = Vector2(minf(300.0, viewport_size.x - 36.0), 150.0)
+			receipt_pos = Vector2(18.0, 112.0)
+		_set_control_rect(shot_receipt_panel, receipt_pos, receipt_size)
 	if pause_panel != null:
 		var pause_size := Vector2(minf(980.0, viewport_size.x - 96.0), minf(704.0, viewport_size.y - 96.0))
 		_set_control_rect(pause_panel, (viewport_size - pause_size) * 0.5, pause_size)
@@ -1880,8 +1887,8 @@ func _build_table_intro_panel() -> void:
 
 func _build_shot_receipt_panel() -> void:
 	shot_receipt_panel = PanelContainer.new()
-	shot_receipt_panel.position = Vector2(260, 500)
-	shot_receipt_panel.custom_minimum_size = Vector2(760, 150)
+	shot_receipt_panel.position = Vector2(24, 142)
+	shot_receipt_panel.custom_minimum_size = Vector2(322, 168)
 	shot_receipt_panel.visible = false
 	shot_receipt_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	shot_receipt_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.014, 0.012, 0.022, 0.94), THEME_MINT, 2))
@@ -1898,9 +1905,11 @@ func _build_shot_receipt_panel() -> void:
 	box.add_theme_constant_override("separation", 4)
 	margin.add_child(box)
 
-	shot_receipt_title = _new_label("", 21, THEME_GOLD)
-	shot_receipt_body = _new_label("", 15, Color(0.86, 0.98, 1.0))
-	shot_receipt_footer = _new_label("", 13, Color(0.98, 0.88, 0.68))
+	shot_receipt_title = _new_label("", 18, THEME_GOLD)
+	shot_receipt_body = _new_label("", 14, Color(0.86, 0.98, 1.0))
+	shot_receipt_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	shot_receipt_footer = _new_label("", 12, Color(0.98, 0.88, 0.68))
+	shot_receipt_footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(shot_receipt_title)
 	box.add_child(shot_receipt_body)
 	box.add_child(shot_receipt_footer)
@@ -4400,6 +4409,7 @@ func _load_table(index: int) -> void:
 	fire_trail_points.clear()
 	score_trail_bursts.clear()
 	live_score_ticks.clear()
+	score_side_feed.clear()
 	relic_field_cooldowns.clear()
 	fire_trail_emit_accum = 0.0
 	_end_last_ball_drama(true)
@@ -5580,6 +5590,18 @@ func _spawn_score_trail(ball_id: StringName, end_pos: Vector2, value: int, color
 	})
 	if score_trail_bursts.size() > 12:
 		score_trail_bursts = score_trail_bursts.slice(score_trail_bursts.size() - 12)
+	var feed_text := "Whiff -" + str(value) if negative else "Travel +" + str(value)
+	_push_score_side_feed(feed_text, Color(1.0, 0.22, 0.18) if negative else color, 1.18 if negative else intensity)
+
+func _push_score_side_feed(text: String, color: Color, intensity: float = 1.0) -> void:
+	score_side_feed.append({
+		"text": text,
+		"color": color,
+		"ttl": 2.1 * clampf(intensity, 0.75, 1.35),
+		"life": 2.1 * clampf(intensity, 0.75, 1.35)
+	})
+	if score_side_feed.size() > 8:
+		score_side_feed = score_side_feed.slice(score_side_feed.size() - 8)
 
 func _spawn_miss_score_trails(summary: ShotSummary) -> void:
 	if summary.has_successful_pot():
@@ -5603,6 +5625,14 @@ func _spawn_miss_score_trails(summary: ShotSummary) -> void:
 		_spawn_score_trail(id, history[history.size() - 1], lost_score, Color(1.0, 0.18, 0.16), true, intensity)
 
 func _update_score_trails(delta: float) -> void:
+	if not score_side_feed.is_empty():
+		for i in range(score_side_feed.size() - 1, -1, -1):
+			var item := score_side_feed[i]
+			item["ttl"] = float(item.get("ttl", 0.0)) - delta
+			if float(item.get("ttl", 0.0)) <= 0.0:
+				score_side_feed.remove_at(i)
+			else:
+				score_side_feed[i] = item
 	if not live_score_ticks.is_empty():
 		for i in range(live_score_ticks.size() - 1, -1, -1):
 			var tick := live_score_ticks[i]
@@ -5622,7 +5652,7 @@ func _update_score_trails(delta: float) -> void:
 			score_trail_bursts[i] = burst
 
 func _draw_score_trails() -> void:
-	if score_trail_bursts.is_empty() and live_score_ticks.is_empty() and not _has_live_travel_trails():
+	if score_side_feed.is_empty() and live_score_ticks.is_empty() and not _has_live_travel_trails():
 		return
 	var font := ThemeDB.fallback_font
 	_draw_live_travel_trails(font)
@@ -5637,42 +5667,22 @@ func _draw_score_trails() -> void:
 		var alpha := 0.86 * t
 		draw_circle(pos + Vector2(0, -rise * 0.35), 7.0 + (1.0 - t) * 8.0, Color(color.r, color.g, color.b, 0.10 * t))
 		draw_string(font, pos + Vector2(-26.0, -rise), "+" + str(value), HORIZONTAL_ALIGNMENT_CENTER, 52.0, int(14 + (1.0 - t) * 7.0), Color(color.r, color.g, color.b, alpha))
-	for burst in score_trail_bursts:
-		var points: Array = burst.get("points", [])
-		if points.size() < 2:
-			continue
-		var ttl := float(burst.get("ttl", 0.0))
-		var life := maxf(0.01, float(burst.get("life", 1.0)))
+	if score_side_feed.is_empty():
+		return
+	var visible_count := mini(score_side_feed.size(), 5)
+	var panel := Rect2(TABLE_RECT.position + Vector2(-94.0, 138.0), Vector2(178.0, 34.0 + visible_count * 24.0))
+	draw_rect(panel, Color(0.008, 0.006, 0.012, 0.76))
+	draw_rect(panel, Color(1.0, 0.78, 0.24, 0.36), false, 2.0)
+	draw_string(font, panel.position + Vector2(12.0, 22.0), "Shot Score", HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 24.0, 13, Color(1.0, 0.88, 0.42, 0.88))
+	for i in range(visible_count):
+		var item: Dictionary = score_side_feed[score_side_feed.size() - 1 - i]
+		var ttl := float(item.get("ttl", 0.0))
+		var life := maxf(0.01, float(item.get("life", 1.0)))
 		var t := clampf(ttl / life, 0.0, 1.0)
-		var color: Color = burst.get("color", Color(0.72, 1.0, 0.66))
-		var negative := bool(burst.get("negative", false))
-		var value := int(burst.get("value", 0))
-		var intensity := maxf(0.35, float(burst.get("intensity", 1.0)))
-		var segments := points.size() - 1
-		for i in range(segments):
-			var a: Vector2 = points[i]
-			var b: Vector2 = points[i + 1]
-			var progress := float(i + 1) / float(maxi(1, segments))
-			var alpha := (0.10 + progress * 0.55) * t * clampf(intensity, 0.8, 1.65)
-			var width := lerpf(2.0, 7.0 + intensity * 2.0, progress) * (0.45 + 0.55 * t)
-			draw_line(a, b, Color(color.r, color.g, color.b, alpha), width)
-			if not negative and value > 0 and i % 2 == 0:
-				var tick_value := maxi(1, int(round(float(value) * progress)))
-				var tick_pos := a.lerp(b, 0.62)
-				var tick_alpha := alpha * 1.25
-				draw_string(font, tick_pos + Vector2(7.0, -7.0 - progress * 10.0), "+" + str(tick_value), HORIZONTAL_ALIGNMENT_LEFT, 88.0, int(12 + progress * 8 + intensity * 2.0), Color(color.r, color.g, color.b, tick_alpha))
-		var end_pos: Vector2 = points[points.size() - 1]
-		if negative:
-			var lost_text := "WHIFF"
-			if value > 0:
-				lost_text = "WHIFF -" + str(value)
-			draw_circle(end_pos, 20.0 + (1.0 - t) * 24.0 + intensity * 5.0, Color(1.0, 0.08, 0.06, 0.15 * t))
-			draw_arc(end_pos, 30.0 + (1.0 - t) * 24.0, -room_pulse * 4.0, TAU - room_pulse * 4.0, 48, Color(1.0, 0.16, 0.08, 0.68 * t), 3.0 + intensity)
-			draw_string(font, end_pos + Vector2(-58.0, -42.0), lost_text, HORIZONTAL_ALIGNMENT_CENTER, 126.0, int(18 + intensity * 2.0), Color(1.0, 0.20, 0.16, 0.92 * t))
-		elif value > 0:
-			draw_circle(end_pos, 20.0 + (1.0 - t) * 22.0 + intensity * 6.0, Color(color.r, color.g, color.b, 0.16 * t))
-			draw_arc(end_pos, 26.0 + (1.0 - t) * 18.0 + intensity * 5.0, 0.0, TAU, 48, Color(color.r, color.g, color.b, 0.72 * t), 3.0 + intensity * 0.6)
-			draw_string(font, end_pos + Vector2(-54.0, -48.0), "TRAVEL +" + str(value), HORIZONTAL_ALIGNMENT_CENTER, 128.0, int(18 + intensity * 2.0), Color(color.r, color.g, color.b, 0.95 * t))
+		var color: Color = item.get("color", Color(0.72, 1.0, 0.58))
+		var y := panel.position.y + 46.0 + i * 23.0
+		draw_circle(panel.position + Vector2(14.0, y - 5.0), 4.5, Color(color.r, color.g, color.b, 0.24 + 0.36 * t))
+		draw_string(font, panel.position + Vector2(26.0, y), String(item.get("text", "")), HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 34.0, 13, Color(color.r, color.g, color.b, 0.55 + 0.40 * t))
 
 func _has_live_travel_trails() -> bool:
 	if state != State.SHOT_IN_MOTION:
@@ -5778,9 +5788,17 @@ func _apply_table_zone_effects(delta: float) -> void:
 			var strength := float(zone.get("strength", 1.0))
 			match kind:
 				&"sticky":
-					var damp_factor := clampf(1.0 - strength * delta, 0.72, 1.0)
+					var speed: float = ball.linear_velocity.length()
+					var min_speed := 86.0 if ball.kind == &"cue" else 58.0
+					if speed <= min_speed:
+						continue
+					var drag_scale := 0.36 if ball.kind == &"cue" else 0.58
+					var damp_factor := clampf(1.0 - strength * drag_scale * delta, 0.86, 1.0)
 					ball.linear_velocity *= damp_factor
 					ball.angular_velocity *= damp_factor
+					var new_speed: float = ball.linear_velocity.length()
+					if new_speed < min_speed:
+						ball.linear_velocity = ball.linear_velocity.normalized() * min_speed
 				&"ice":
 					var speed: float = ball.linear_velocity.length()
 					if speed > SETTLE_LINEAR_SPEED:
@@ -5904,6 +5922,7 @@ func _fire_shot() -> void:
 	ball_trail_histories.clear()
 	live_travel_score_shown.clear()
 	live_score_ticks.clear()
+	score_side_feed.clear()
 	relic_field_cooldowns.clear()
 	pocket_reject_cooldown.clear()
 	cue_contact_ids.clear()
@@ -9262,8 +9281,7 @@ func _draw() -> void:
 	var rail_color: Color = current_table.get("rail_color", Color(0.09, 0.055, 0.035))
 	var outer_color: Color = current_table.get("outer_color", Color(0.05, 0.028, 0.018))
 	_draw_room_backdrop(accent, outer_color)
-	_draw_room_signage(accent, outer_color)
-	_draw_room_props(accent, outer_color)
+	_draw_room_signage(accent)
 	_draw_table_identity_badges(accent)
 	_draw_table_rule_stamps(accent)
 	draw_rect(Rect2(TABLE_RECT.position - Vector2(RAIL_THICKNESS + 12.0, RAIL_THICKNESS + 12.0), TABLE_RECT.size + Vector2((RAIL_THICKNESS + 12.0) * 2.0, (RAIL_THICKNESS + 12.0) * 2.0)), outer_color)
@@ -9409,6 +9427,39 @@ func _draw_soul_marker_icon(center: Vector2, size: float, color: Color) -> void:
 	draw_circle(center, size * 0.28, Color(0.72, 1.0, 0.90, 0.56))
 	draw_arc(center, size * 0.46, -PI * 0.15, PI * 1.15, 24, Color(1.0, 0.82, 0.28, 0.54), 1.5)
 
+func _draw_status_glyph(center: Vector2, radius: float, label: String, color: Color) -> void:
+	var font := ThemeDB.fallback_font
+	draw_circle(center, radius, Color(0.012, 0.008, 0.014, 0.98))
+	draw_arc(center, radius - 1.0, 0.0, TAU, 32, Color(color.r, color.g, color.b, 0.88), 2.0)
+	draw_arc(center, radius * 0.62, -PI * 0.25, PI * 1.05, 24, Color(0.56, 1.0, 0.88, 0.34), 1.2)
+	draw_string(font, center + Vector2(-radius, radius * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, int(radius * 1.05), Color(color.r, color.g, color.b, 0.98))
+
+func _draw_eye_glyph(center: Vector2, width: float, color: Color) -> void:
+	var half := width * 0.5
+	var eye_color := Color(color.r, color.g, color.b, 0.90)
+	draw_arc(center, half, PI * 1.07, PI * 1.93, 28, eye_color, 2.0)
+	draw_arc(center, half, PI * 0.07, PI * 0.93, 28, eye_color, 2.0)
+	draw_circle(center, width * 0.18, Color(0.56, 1.0, 0.88, 0.76))
+	draw_circle(center, width * 0.07, Color(0.008, 0.006, 0.012, 0.98))
+
+func _dare_glyph_label(intent: StringName) -> String:
+	match intent:
+		&"called":
+			return "C"
+		&"rail":
+			return "R"
+		&"control":
+			return "G"
+		&"power":
+			return "!"
+		&"gold":
+			return "$"
+		&"boss":
+			return "8"
+		&"clean":
+			return "+"
+	return "L"
+
 func _draw_lucien_dare_panel(accent: Color) -> void:
 	if current_table.is_empty():
 		return
@@ -9421,13 +9472,13 @@ func _draw_lucien_dare_panel(accent: Color) -> void:
 	draw_rect(chip, Color(0.016, 0.010, 0.020, 0.88))
 	draw_rect(chip, Color(active_color.r, active_color.g, active_color.b, 0.56 + (0.18 * pulse if lucien_dare_active else 0.0)), false, 2.0)
 	if lucien_dare_active:
-		_draw_ui_sprite(_dare_icon_id(rival_intent), Rect2(chip.position + Vector2(10.0, 8.0), Vector2(38.0, 38.0)), Color.WHITE)
+		_draw_status_glyph(chip.position + Vector2(29.0, 27.0), 17.0, _dare_glyph_label(rival_intent), active_color)
 		draw_string(font, chip.position + Vector2(54.0, 20.0), "Lucien's Dare: " + _rival_intent_detail(rival_intent), HORIZONTAL_ALIGNMENT_LEFT, chip.size.x - 64.0, 15, Color(1.0, 0.90, 0.42, 0.98))
 		var reward_text := "Reward: +" + str(_lucien_dare_score_reward()) + " score, +$" + str(_lucien_dare_cash_reward())
 		var miss_text := "Miss: Warning +1; 2 warnings = MARKER CLAIMED"
 		draw_string(font, chip.position + Vector2(54.0, 42.0), reward_text + " | " + miss_text, HORIZONTAL_ALIGNMENT_LEFT, chip.size.x - 64.0, 12, Color(0.86, 0.96, 1.0, 0.92))
 	else:
-		_draw_ui_sprite(&"eye_icon", Rect2(chip.position + Vector2(10.0, 4.0), Vector2(26.0, 24.0)), Color.WHITE)
+		_draw_eye_glyph(chip.position + Vector2(23.0, 16.0), 22.0, active_color)
 		draw_string(font, chip.position + Vector2(44.0, 21.0), _lucien_dare_status_text(), HORIZONTAL_ALIGNMENT_LEFT, chip.size.x - 54.0, 14, Color(0.86, 0.96, 1.0, 0.92))
 	if lucien_dare_flash_seconds > 0.0 and lucien_dare_flash_text != "":
 		var alpha := clampf(lucien_dare_flash_seconds / 2.4, 0.0, 1.0)
@@ -9451,7 +9502,7 @@ func _draw_call_pocket_button(accent: Color) -> void:
 	var label := "C  Call Pocket" if not calling_pocket_mode else "Pick a glowing pocket"
 	if called_pocket_id != &"" and not calling_pocket_mode:
 		label = "C  " + _called_pocket_text()
-	_draw_ui_sprite(&"call_icon", Rect2(rect.position + Vector2(8.0, 3.0), Vector2(24.0, 24.0)), Color.WHITE)
+	_draw_status_glyph(rect.position + Vector2(20.0, 15.0), 10.0, "C", edge)
 	draw_string(font, rect.position + Vector2(38.0, 21.0), label, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 44.0, 14, Color(1.0, 0.90, 0.46, 0.96))
 
 func _draw_call_pocket_mode(accent: Color) -> void:
@@ -9466,25 +9517,27 @@ func _draw_call_pocket_mode(accent: Color) -> void:
 		draw_circle(pos, 55.0 + pulse * 7.0, Color(1.0, 0.82, 0.25, 0.11 + pulse * 0.05))
 		draw_arc(pos, 47.0 + pulse * 4.0, 0.0, TAU, 64, Color(1.0, 0.86, 0.32, 0.86), 3.0)
 		var label := _pocket_display_name(pocket.pocket_id)
-		var label_pos := pos + _pocket_label_offset(pocket.pocket_id)
-		draw_rect(Rect2(label_pos + Vector2(-6.0, -19.0), Vector2(126.0, 24.0)), Color(0.012, 0.010, 0.018, 0.78))
-		draw_string(font, label_pos, label, HORIZONTAL_ALIGNMENT_LEFT, 118.0, 15, Color(1.0, 0.92, 0.48, 0.96))
+		var label_rect := _pocket_label_rect(pocket.pocket_id, pos)
+		draw_rect(label_rect, Color(0.012, 0.010, 0.018, 0.82))
+		draw_rect(label_rect, Color(1.0, 0.82, 0.28, 0.28), false, 1.0)
+		draw_string(font, label_rect.position + Vector2(8.0, 17.0), label, HORIZONTAL_ALIGNMENT_LEFT, label_rect.size.x - 16.0, 14, Color(1.0, 0.92, 0.48, 0.96))
 
-func _pocket_label_offset(id: StringName) -> Vector2:
+func _pocket_label_rect(id: StringName, pos: Vector2) -> Rect2:
+	var size := Vector2(116.0, 22.0)
 	match id:
 		&"NW":
-			return Vector2(14.0, 18.0)
+			return Rect2(pos + Vector2(44.0, 12.0), size)
 		&"N":
-			return Vector2(-50.0, 44.0)
+			return Rect2(pos + Vector2(-58.0, 50.0), size)
 		&"NE":
-			return Vector2(-114.0, 18.0)
+			return Rect2(pos + Vector2(-160.0, 12.0), size)
 		&"SW":
-			return Vector2(14.0, -34.0)
+			return Rect2(pos + Vector2(44.0, -34.0), size)
 		&"S":
-			return Vector2(-62.0, -44.0)
+			return Rect2(pos + Vector2(-58.0, -54.0), size)
 		&"SE":
-			return Vector2(-122.0, -34.0)
-	return Vector2(16.0, -28.0)
+			return Rect2(pos + Vector2(-160.0, -34.0), size)
+	return Rect2(pos + Vector2(44.0, -34.0), size)
 
 func _active_dare_needs_called_pocket() -> bool:
 	return lucien_dare_active and rival_intent == &"called"
@@ -9526,25 +9579,10 @@ func _rail_rect_for_id(id: StringName) -> Rect2:
 
 func _draw_room_backdrop(accent: Color, outer_color: Color) -> void:
 	var visible_room := TABLE_RECT.grow(210.0)
-	draw_rect(visible_room, Color(0.018, 0.017, 0.019, 1.0))
-	draw_rect(Rect2(visible_room.position, Vector2(visible_room.size.x, 112.0)), Color(outer_color.r * 0.7, outer_color.g * 0.7, outer_color.b * 0.7, 0.95))
-	draw_rect(Rect2(visible_room.position + Vector2(0, visible_room.size.y - 150.0), Vector2(visible_room.size.x, 150.0)), Color(0.032, 0.030, 0.034, 1.0))
-	var pulse_alpha := 0.10 + 0.035 * sin(room_pulse * 1.4)
-	for i in range(9):
-		var t := float(i) / 8.0
-		var floor_x := lerpf(visible_room.position.x + 70.0, visible_room.end.x - 70.0, t)
-		draw_line(Vector2(floor_x, TABLE_RECT.end.y + RAIL_THICKNESS + 18.0), Vector2(floor_x - 90.0 + 180.0 * t, visible_room.end.y), Color(accent.r, accent.g, accent.b, pulse_alpha), 1.0)
-	for i in range(6):
-		var y := TABLE_RECT.position.y - RAIL_THICKNESS - 36.0 - i * 28.0
-		draw_line(Vector2(visible_room.position.x + 48.0, y), Vector2(visible_room.end.x - 48.0, y + 8.0), Color(1.0, 0.78, 0.24, 0.06 + i * 0.006), 1.0)
+	draw_rect(visible_room, Color(0.010, 0.009, 0.013, 1.0))
+	draw_rect(Rect2(visible_room.position, Vector2(visible_room.size.x, 116.0)), Color(outer_color.r * 0.55, outer_color.g * 0.55, outer_color.b * 0.55, 0.88))
+	draw_rect(Rect2(visible_room.position + Vector2(0.0, visible_room.size.y - 136.0), Vector2(visible_room.size.x, 136.0)), Color(0.020, 0.018, 0.022, 1.0))
 	_draw_lucien_presence(accent)
-	var cashier_rect := Rect2(TABLE_RECT.position + Vector2(-124.0, 34.0), Vector2(78.0, TABLE_RECT.size.y - 68.0))
-	draw_rect(cashier_rect, Color(0.012, 0.010, 0.014, 0.64))
-	draw_rect(cashier_rect, Color(accent.r, accent.g, accent.b, 0.20), false, 2.0)
-	for i in range(7):
-		var y := cashier_rect.position.y + 28.0 + i * 52.0
-		draw_line(Vector2(cashier_rect.position.x + 14.0, y), Vector2(cashier_rect.end.x - 14.0, y + 18.0), Color(1.0, 0.82, 0.30, 0.22), 2.0)
-		draw_line(Vector2(cashier_rect.position.x + 14.0, y + 18.0), Vector2(cashier_rect.end.x - 14.0, y), Color(1.0, 0.82, 0.30, 0.12), 1.0)
 
 func _draw_lucien_presence(accent: Color) -> void:
 	if current_table.is_empty():
@@ -9562,7 +9600,7 @@ func _draw_lucien_presence(accent: Color) -> void:
 	if StringName(current_table.get("objective", &"")) == &"boss":
 		draw_arc(pos + Vector2(0.0, 30.0), 60.0 + pulse * 8.0, 0.0, TAU, 64, Color(0.92, 0.10, 1.0, 0.34 + pulse * 0.18), 3.0)
 
-func _draw_room_signage(accent: Color, outer_color: Color) -> void:
+func _draw_room_signage(accent: Color) -> void:
 	var font := ThemeDB.fallback_font
 	var sign_rect := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5 - 190.0, -154.0), Vector2(380.0, 70.0))
 	var glow := 0.18 + 0.06 * sin(room_pulse * 2.2)
@@ -9572,12 +9610,6 @@ func _draw_room_signage(accent: Color, outer_color: Color) -> void:
 	draw_rect(sign_rect.grow(2.0), Color(accent.r, accent.g, accent.b, 0.54), false, 2.0)
 	draw_string(font, sign_rect.position + Vector2(18.0, 32.0), _room_sign_title(), HORIZONTAL_ALIGNMENT_CENTER, sign_rect.size.x - 36.0, 25, Color(1.0, 0.88, 0.40, 0.98))
 	draw_string(font, sign_rect.position + Vector2(18.0, 56.0), _room_sign_subtitle(), HORIZONTAL_ALIGNMENT_CENTER, sign_rect.size.x - 36.0, 15, Color(0.82, 1.0, 0.94, 0.86))
-	var left_plate := Rect2(sign_rect.position + Vector2(-106.0, 14.0), Vector2(80.0, 42.0))
-	var right_plate := Rect2(sign_rect.end + Vector2(26.0, -56.0), Vector2(80.0, 42.0))
-	for plate in [left_plate, right_plate]:
-		_draw_table_sprite(&"separator_skull", Rect2(plate.position - Vector2(8.0, 5.0), plate.size + Vector2(16.0, 10.0)), Color(1.0, 0.92, 0.62, 0.58))
-		draw_rect(plate, Color(outer_color.r * 0.9, outer_color.g * 0.9, outer_color.b * 0.9, 0.44))
-		draw_rect(plate, Color(accent.r, accent.g, accent.b, 0.32), false, 2.0)
 
 func _room_sign_title() -> String:
 	match current_table.get("id", &""):
@@ -9802,7 +9834,9 @@ func _draw_called_pocket_marker(accent: Color) -> void:
 	var font := ThemeDB.fallback_font
 	draw_arc(pos, 43.0, 0.0, TAU, 64, Color(1.0, 0.86, 0.32, 0.98), 4.0)
 	draw_arc(pos, 52.0, 0.0, TAU, 64, Color(accent.r, accent.g, accent.b, 0.42), 2.0)
-	draw_string(font, pos + _pocket_label_offset(called_pocket_id), _pocket_display_name(called_pocket_id), HORIZONTAL_ALIGNMENT_LEFT, 118.0, 14, Color(1.0, 0.92, 0.48, 0.82))
+	var label_rect := _pocket_label_rect(called_pocket_id, pos)
+	draw_rect(label_rect, Color(0.012, 0.010, 0.018, 0.72))
+	draw_string(font, label_rect.position + Vector2(8.0, 17.0), _pocket_display_name(called_pocket_id), HORIZONTAL_ALIGNMENT_LEFT, label_rect.size.x - 16.0, 14, Color(1.0, 0.92, 0.48, 0.82))
 	if cue_ball != null and is_instance_valid(cue_ball) and not cue_ball.potted and (state == State.AIMING or state == State.CHARGING_SHOT):
 		draw_line(cue_ball.global_position, pos, Color(1.0, 0.86, 0.32, 0.16), 2.0)
 
