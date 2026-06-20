@@ -2,7 +2,6 @@ class_name PocketArea
 extends Area2D
 
 const PoolBall = preload("res://scripts/physics/PoolBall.gd")
-
 var pocket_id: StringName = &""
 var radius: float = 34.0
 var tint: Color = Color(0.65, 0.08, 0.95, 0.9)
@@ -14,6 +13,7 @@ func setup(id: StringName, p_radius: float, p_tint: Color, table_ref: Node) -> v
 	radius = p_radius
 	tint = p_tint
 	table = table_ref
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	collision_layer = 4
 	collision_mask = 1
 	var shape := CircleShape2D.new()
@@ -45,7 +45,26 @@ func _on_body_entered(body: Node) -> void:
 		table.on_pocket_entered(body, self, false)
 
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, radius + 7.0 + pulse * 18.0, Color(tint.r, tint.g, tint.b, 0.10 + pulse * 0.20))
-	draw_circle(Vector2.ZERO, radius + 3.0, Color(0.02, 0.0, 0.03, 1.0))
-	draw_arc(Vector2.ZERO, radius + 2.0, 0.0, TAU, 48, tint, 3.0 + pulse * 2.0)
-	draw_circle(Vector2.ZERO, radius * 0.68, Color(0.0, 0.0, 0.0, 0.82))
+	var mouth := radius * 0.82
+	var outer := radius + 13.0
+	var pulse_alpha := 0.10 + pulse * 0.18
+	draw_circle(Vector2.ZERO, outer + pulse * 12.0, Color(tint.r, tint.g, tint.b, pulse_alpha))
+	draw_circle(Vector2.ZERO, outer + 4.0, Color(0.008, 0.006, 0.010, 0.96))
+	draw_circle(Vector2.ZERO, outer, Color(0.60, 0.42, 0.13, 0.96))
+	draw_circle(Vector2.ZERO, outer - 4.0, Color(0.06, 0.045, 0.032, 0.98))
+	draw_arc(Vector2.ZERO, outer - 1.0, -PI * 0.08, PI * 0.92, 44, Color(1.0, 0.82, 0.24, 0.92), 3.0 + pulse * 1.5)
+	draw_arc(Vector2.ZERO, outer - 8.0, PI * 1.08, PI * 1.86, 32, Color(0.92, 0.82, 0.56, 0.48), 2.0)
+	_draw_rim_corners(outer)
+	draw_circle(Vector2.ZERO, mouth + 6.0, Color(0.015, 0.004, 0.020, 1.0))
+	draw_circle(Vector2.ZERO, mouth, Color(0.0, 0.0, 0.0, 0.96))
+	draw_arc(Vector2.ZERO, mouth + 3.0, 0.0, TAU, 48, Color(tint.r, tint.g, tint.b, 0.62 + pulse * 0.25), 2.0)
+
+func _draw_rim_corners(outer: float) -> void:
+	var rune_color := Color(1.0, 0.86, 0.30, 0.66)
+	for i in range(4):
+		var angle := PI * 0.25 + float(i) * PI * 0.5
+		var dir := Vector2(cos(angle), sin(angle))
+		var side := Vector2(-dir.y, dir.x)
+		var center := dir * (outer - 5.0)
+		draw_line(center - side * 7.0, center + side * 7.0, rune_color, 2.0)
+		draw_line(center - dir * 7.0, center + dir * 7.0, Color(0.0, 0.0, 0.0, 0.34), 1.0)

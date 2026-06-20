@@ -3,88 +3,112 @@ extends RefCounted
 
 const RELICS: Dictionary = {
 	&"money_ball": {
-		"name": "Money Ball",
+		"name": "Midas Eye",
 		"rarity": &"common",
-		"family": [&"Economy"],
-		"text": "Each table starts with one extra gold ball."
+		"family": [&"Offering", &"Economy"],
+		"text": "Each table starts with one extra gold ball, a bright tithe for the house."
 	},
 	&"sniper": {
-		"name": "Sniper",
+		"name": "Dead Man's Sight",
 		"rarity": &"common",
-		"family": [&"Aim"],
+		"family": [&"Omen", &"Aim"],
 		"text": "For your first 3 shots each table, the preview line reaches maximum length."
 	},
 	&"entropy_scanner": {
-		"name": "Entropy Scanner",
+		"name": "Oracle Prism",
 		"rarity": &"rare",
-		"family": [&"Aim", &"Ricochet"],
+		"family": [&"Omen", &"Ricochet"],
 		"text": "For your first 3 shots each table, previews show extra ricochet continuations."
 	},
 	&"center_cut": {
-		"name": "Center Cut",
+		"name": "Saint's Needle",
 		"rarity": &"common",
-		"family": [&"Precision"],
+		"family": [&"Rite", &"Precision"],
 		"text": "Perfect pots add score and $1."
 	},
 	&"rail_coupon": {
-		"name": "Rail Coupon",
+		"name": "Rail Tithe",
 		"rarity": &"common",
-		"family": [&"Bank", &"Economy"],
+		"family": [&"Oath", &"Bank"],
 		"text": "Bank or kick pots pay cash."
 	},
 	&"combo_receipt": {
-		"name": "Combo Receipt",
+		"name": "Twin-Tongue Ledger",
 		"rarity": &"uncommon",
-		"family": [&"Multi-pot"],
+		"family": [&"Offering", &"Multi-pot"],
 		"text": "Multi-pot shots add score and cash."
 	},
 	&"spare_ball": {
-		"name": "Spare Ball",
+		"name": "Bone Insurance",
 		"rarity": &"uncommon",
-		"family": [&"Safety"],
+		"family": [&"Ward", &"Safety"],
 		"text": "Clearing a table with 3+ balls left restores 1 ball."
 	},
 	&"chalk_credit": {
-		"name": "Chalk Credit",
+		"name": "Pale Chalk",
 		"rarity": &"uncommon",
-		"family": [&"Economy", &"Control"],
+		"family": [&"Ward", &"Control"],
 		"text": "Soft-touch scoring shots pay cash."
 	},
 	&"long_glass": {
-		"name": "Long Glass",
+		"name": "Mourner's Glass",
 		"rarity": &"uncommon",
-		"family": [&"Distance"],
+		"family": [&"Omen", &"Distance"],
 		"text": "Long pots add score and cash."
 	},
 	&"hot_hand": {
-		"name": "Hot Hand",
+		"name": "Ember Palm",
 		"rarity": &"rare",
-		"family": [&"Chain"],
+		"family": [&"Flame", &"Chain"],
 		"text": "Chain Heat pots score more."
 	},
 	&"split_lens": {
-		"name": "Split Lens",
+		"name": "Mirror Hex",
 		"rarity": &"rare",
-		"family": [&"Ricochet"],
+		"family": [&"Hex", &"Ricochet"],
 		"text": "Ricochet pots add extra cash."
 	},
 	&"called_tab": {
-		"name": "Called Tab",
+		"name": "Spoken Debt",
 		"rarity": &"common",
-		"family": [&"Called"],
+		"family": [&"Oath", &"Called"],
 		"text": "Called-pocket pots add cash."
 	},
 	&"bumper_policy": {
-		"name": "Bumper Policy",
+		"name": "Riot Charm",
 		"rarity": &"rare",
-		"family": [&"Chaos", &"Safety"],
+		"family": [&"Hex", &"Chaos"],
 		"text": "Cluster-break shots add score and $1."
 	},
 	&"quiet_hands": {
-		"name": "Quiet Hands",
+		"name": "Velvet Prayer",
 		"rarity": &"rare",
-		"family": [&"Control"],
+		"family": [&"Ward", &"Control"],
 		"text": "Soft Touch also grants +1 Style."
+	},
+	&"witching_well": {
+		"name": "Witching Well",
+		"rarity": &"uncommon",
+		"family": [&"Field", &"Control"],
+		"text": "A center sigil gently pulls moving object balls inward. Long or carom pots through the well add score."
+	},
+	&"salt_circle": {
+		"name": "Salt Circle",
+		"rarity": &"common",
+		"family": [&"Field", &"Ward"],
+		"text": "A pale ward steadies balls near center. Soft-touch scoring shots gain score and Style."
+	},
+	&"blood_moon": {
+		"name": "Blood Moon",
+		"rarity": &"rare",
+		"family": [&"Field", &"Risk"],
+		"text": "A red moon field wakes risk balls. Risk-ball pots add score and cash."
+	},
+	&"grave_lantern": {
+		"name": "Grave Lantern",
+		"rarity": &"uncommon",
+		"family": [&"Field", &"Called"],
+		"text": "The called pocket burns with a grave light. Called-pocket pots add score and cash."
 	}
 }
 
@@ -93,58 +117,98 @@ func apply_on_shot_resolve(summary, relic_ids: Array[StringName], context: Dicti
 		var bonus: int = 180 * int(summary.perfect_pots)
 		summary.final_score += bonus
 		summary.cash_delta += int(summary.perfect_pots)
-		summary.breakdown.append("Center Cut: +" + str(bonus) + ", +$" + str(int(summary.perfect_pots)))
+		summary.breakdown.append("Saint's Needle: +" + str(bonus) + ", +$" + str(int(summary.perfect_pots)))
 
 	if relic_ids.has(&"rail_coupon") and (summary.tags.has(&"BANK") or summary.tags.has(&"KICK")):
 		summary.cash_delta += 3
-		summary.breakdown.append("Rail Coupon: +$3")
+		summary.breakdown.append("Rail Tithe: +$3")
 
 	if relic_ids.has(&"combo_receipt") and summary.tags.has(&"MULTI_POT"):
 		summary.final_score += 220
 		summary.cash_delta += 3
-		summary.breakdown.append("Combo Receipt: +220, +$3")
+		summary.breakdown.append("Twin-Tongue Ledger: +220, +$3")
 
 	if relic_ids.has(&"chalk_credit") and summary.tags.has(&"SOFT_TOUCH"):
 		summary.cash_delta += 2
-		summary.breakdown.append("Chalk Credit: +$2")
+		summary.breakdown.append("Pale Chalk: +$2")
 
 	if relic_ids.has(&"long_glass") and summary.tags.has(&"LONG_POT"):
 		summary.final_score += 150
 		summary.cash_delta += 2
-		summary.breakdown.append("Long Glass: +150, +$2")
+		summary.breakdown.append("Mourner's Glass: +150, +$2")
 
 	if relic_ids.has(&"hot_hand") and summary.tags.has(&"CHAIN_POT"):
 		var hot_bonus := 130 * int(summary.chain_pot_count)
 		summary.final_score += hot_bonus
-		summary.breakdown.append("Hot Hand: +" + str(hot_bonus))
+		summary.breakdown.append("Ember Palm: +" + str(hot_bonus))
 
 	if relic_ids.has(&"split_lens") and summary.tags.has(&"RICOCHET_POT"):
 		var cash := 3 * int(summary.ricochet_pot_count)
 		summary.cash_delta += cash
-		summary.breakdown.append("Split Lens: +$" + str(cash))
+		summary.breakdown.append("Mirror Hex: +$" + str(cash))
 
 	if relic_ids.has(&"called_tab") and summary.tags.has(&"CALLED_POCKET"):
 		var called_cash := 2 * int(summary.called_pocket_hits)
 		summary.cash_delta += called_cash
-		summary.breakdown.append("Called Tab: +$" + str(called_cash))
+		summary.breakdown.append("Spoken Debt: +$" + str(called_cash))
 
 	if relic_ids.has(&"bumper_policy") and summary.tags.has(&"CLUSTER_BREAK"):
 		summary.final_score += 140
 		summary.cash_delta += 1
-		summary.breakdown.append("Bumper Policy: +140, +$1")
+		summary.breakdown.append("Riot Charm: +140, +$1")
 
 	if relic_ids.has(&"quiet_hands") and summary.tags.has(&"SOFT_TOUCH"):
 		summary.style_delta += 1
-		summary.breakdown.append("Quiet Hands: +1 Style")
+		summary.breakdown.append("Velvet Prayer: +1 Style")
+
+	if relic_ids.has(&"witching_well") and (summary.tags.has(&"LONG_POT") or summary.tags.has(&"CAROM") or summary.tags.has(&"KISS")):
+		var well_bonus := 120
+		if summary.tags.has(&"LONG_POT"):
+			well_bonus += 40
+		summary.final_score += well_bonus
+		summary.breakdown.append("Witching Well: +" + str(well_bonus))
+
+	if relic_ids.has(&"salt_circle") and summary.tags.has(&"SOFT_TOUCH") and summary.has_successful_pot():
+		summary.final_score += 90
+		summary.style_delta += 1
+		summary.breakdown.append("Salt Circle: +90, +1 Style")
+
+	if relic_ids.has(&"blood_moon") and _summary_has_kind(summary, &"risk"):
+		var risk_count := _summary_kind_count(summary, &"risk")
+		var moon_score := 180 * risk_count
+		var moon_cash := 2 * risk_count
+		summary.final_score += moon_score
+		summary.cash_delta += moon_cash
+		summary.breakdown.append("Blood Moon: +" + str(moon_score) + ", +$" + str(moon_cash))
+
+	if relic_ids.has(&"grave_lantern") and summary.tags.has(&"CALLED_POCKET"):
+		var lantern_score := 110 * int(summary.called_pocket_hits)
+		var lantern_cash := int(summary.called_pocket_hits)
+		summary.final_score += lantern_score
+		summary.cash_delta += lantern_cash
+		summary.breakdown.append("Grave Lantern: +" + str(lantern_score) + ", +$" + str(lantern_cash))
 
 func apply_on_table_complete(summary, relic_ids: Array[StringName], balls_left: int, run_style: int) -> Dictionary:
 	var result := {"score": 0, "cash": 0, "style": 0, "notes": []}
 	var notes: Array[String] = []
 	if relic_ids.has(&"spare_ball") and balls_left >= 3:
 		result["health"] = 1
-		notes.append("Spare Ball: +1 ball")
+		notes.append("Bone Insurance: +1 soul marker")
 	result["notes"] = notes
 	return result
+
+func _summary_has_kind(summary, kind: StringName) -> bool:
+	for potted_kind in summary.potted_kinds:
+		if potted_kind == kind:
+			return true
+	return false
+
+func _summary_kind_count(summary, kind: StringName) -> int:
+	var count := 0
+	for potted_kind in summary.potted_kinds:
+		if potted_kind == kind:
+			count += 1
+	return count
 
 func apply_on_table_fail(relic_ids: Array[StringName]) -> Dictionary:
 	var result := {"health": 0, "notes": []}

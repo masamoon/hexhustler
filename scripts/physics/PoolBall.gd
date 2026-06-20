@@ -3,6 +3,16 @@ extends RigidBody2D
 
 signal contact_reported(ball, other: Node, speed: float)
 
+const BALL_CUE_SPRITE_ATLAS = preload("res://assets/ui/occult_ball_cue_sprites.png")
+const BALL_SPRITE_REGIONS: Dictionary = {
+	&"cue": Rect2(0, 64, 64, 64),
+	&"gold": Rect2(64, 64, 64, 64),
+	&"risk": Rect2(128, 64, 64, 64),
+	&"cursed": Rect2(128, 64, 64, 64),
+	&"bomb": Rect2(192, 64, 64, 64),
+	&"boss": Rect2(256, 64, 64, 64)
+}
+
 var ball_id: StringName = &""
 var kind: StringName = &"normal"
 var base_score: int = 100
@@ -22,6 +32,7 @@ func setup(config: Dictionary, table_ref: Node) -> void:
 	tint = config.get("color", Color.WHITE)
 	marked = bool(config.get("marked", false))
 	table = table_ref
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	gravity_scale = 0.0
 	linear_damp_mode = RigidBody2D.DAMP_MODE_REPLACE
 	angular_damp_mode = RigidBody2D.DAMP_MODE_REPLACE
@@ -97,29 +108,32 @@ func is_settled(linear_threshold: float, angular_threshold: float) -> bool:
 	return potted or (linear_velocity.length() <= linear_threshold and absf(angular_velocity) <= angular_threshold)
 
 func _draw() -> void:
-	var edge := Color(0.04, 0.035, 0.03, 1.0)
-	draw_circle(Vector2.ZERO, radius + 2.5, edge)
-	draw_circle(Vector2.ZERO, radius, tint)
-	draw_arc(Vector2.ZERO, radius * 0.65, -1.1, 1.1, 20, Color(1, 1, 1, 0.28), 2.0)
-	match kind:
-		&"gold":
-			draw_circle(Vector2.ZERO, radius * 0.45, Color(1.0, 0.86, 0.20, 0.95))
-			_draw_glyph("$", Color(0.12, 0.07, 0.0, 0.96), 0.82)
-		&"risk", &"cursed":
-			draw_circle(Vector2.ZERO, radius * 0.48, Color(1.0, 0.76, 0.18, 0.92))
-			draw_arc(Vector2.ZERO, radius * 0.68, 0.0, TAU, 32, Color(0.10, 0.0, 0.03, 0.82), 2.5)
-			_draw_glyph("!", Color(0.12, 0.0, 0.02, 0.96), 0.92)
-		&"bomb":
-			draw_circle(Vector2.ZERO, radius * 0.38, Color(1.0, 0.25, 0.12, 0.95))
-			_draw_glyph("B", Color(0.08, 0.0, 0.0, 0.95), 0.70)
-		&"boss":
-			draw_arc(Vector2.ZERO, radius * 0.72, 0.0, TAU, 36, Color(0.78, 0.08, 0.95, 0.95), 4.0)
-			_draw_glyph("8", Color(1.0, 0.86, 1.0, 0.98), 0.92)
+	var region := _sprite_region_for_ball()
+	var target_size := Vector2(radius * 2.84, radius * 2.84)
+	if kind == &"boss":
+		target_size = Vector2(radius * 3.0, radius * 3.0)
+	var target := Rect2(-target_size * 0.5, target_size)
+	draw_texture_rect_region(BALL_CUE_SPRITE_ATLAS, target, region)
 	if marked:
 		draw_arc(Vector2.ZERO, radius + 6.5, 0.0, TAU, 48, Color(1.0, 0.86, 0.24, 0.98), 3.0)
 		draw_arc(Vector2.ZERO, radius + 10.0, 0.0, TAU, 48, Color(1.0, 0.38, 0.10, 0.72), 1.5)
 		draw_line(Vector2(-radius * 0.56, -radius * 0.56), Vector2(radius * 0.56, radius * 0.56), Color(1.0, 0.86, 0.24, 0.92), 2.0)
 		draw_line(Vector2(-radius * 0.56, radius * 0.56), Vector2(radius * 0.56, -radius * 0.56), Color(1.0, 0.86, 0.24, 0.92), 2.0)
+
+func _sprite_region_for_ball() -> Rect2:
+	if kind == &"normal":
+		var variant := _normal_sprite_variant()
+		return Rect2(float(variant - 1) * 64.0, 0.0, 64.0, 64.0)
+	return BALL_SPRITE_REGIONS.get(kind, BALL_SPRITE_REGIONS.get(&"cue"))
+
+func _normal_sprite_variant() -> int:
+	var text := String(ball_id)
+	var parts := text.split("_")
+	if parts.size() > 0:
+		var tail := parts[parts.size() - 1]
+		if tail.is_valid_int():
+			return ((tail.to_int() - 1) % 12) + 1
+	return (abs(text.hash()) % 12) + 1
 
 func _draw_glyph(glyph: String, color: Color, size_scale: float) -> void:
 	var font := ThemeDB.fallback_font
