@@ -41,11 +41,18 @@ const DESIGN_SIZE := Vector2(1280, 800)
 const VIEWPORT_MARGIN := 18.0
 const BETA_CONTRACT_TABLES := 5
 const STARTING_CASH := 25
+const STARTING_BALLS_LEFT := 6
+const META_CLEAR_CHIPS := 1
+const META_FULL_ROUTE_BONUS := 2
 const DEBT_REP_STEP := 18
 const POCKET_CORNER_GAP := 76.0
-const POCKET_SIDE_GAP := 96.0
+const POCKET_SIDE_GAP := 132.0
 const POCKET_SENSOR_RADIUS := 42.0
 const POCKET_CAPTURE_RADIUS := 36.0
+const POCKET_CUP_DEPTH := 13.0
+const POCKET_MOUTH_DEPTH := 78.0
+const POCKET_LIP_SOFT_ZONE := 24.0
+const POCKET_FUNNEL_ACCEL := 245.0
 const OUT_OF_BOUNDS_MARGIN := 30.0
 const TABLE_BACKSTOP_THICKNESS := 28.0
 const POCKET_THROAT_RADIUS := 72.0
@@ -55,10 +62,38 @@ const SPAWN_CLEARANCE := 48.0
 const SPIN_STEP := 0.25
 const MAX_SPIN := 1.0
 const SAVE_PATH := "user://hexhustler_save.json"
+const PREVIEW_BALL_RESTITUTION := 0.88
+const PREVIEW_CUE_SIDE_SPIN := 0.13
+const PREVIEW_CUE_FOLLOW_SPIN := 0.12
+const LAST_BALL_DRAMA_TRIGGER_DISTANCE := 175.0
+const LAST_BALL_DRAMA_MIN_SPEED := 64.0
+const LAST_BALL_DRAMA_TIME_SCALE := 0.42
+const LAST_BALL_DRAMA_ZOOM := 0.24
+
+const META_UPGRADES: Dictionary = {
+	"preview": {
+		"name": "Long Sight",
+		"text": "Preview line length",
+		"max": 8,
+		"step": 0.12
+	},
+	"power": {
+		"name": "Heavy Break",
+		"text": "Maximum shot power",
+		"max": 6,
+		"step": 0.05
+	},
+	"extra_shot": {
+		"name": "Spare Shot",
+		"text": "One extra ball buffer per table",
+		"max": 1,
+		"step": 1
+	}
+}
 
 var state: State = State.AIMING
 var run_active := false
-var run_health := 6
+var run_health := STARTING_BALLS_LEFT
 var run_cash := 0
 var run_debt := 0
 var run_style := 0
@@ -76,6 +111,8 @@ var table_index := 0
 var table_score := 0
 var table_buy_in := 0
 var table_pot := 0
+var table_challenge: Dictionary = {}
+var table_challenge_offers: Array[Dictionary] = []
 var table_shots_used := 0
 var shots_remaining := 0
 var shot_id := 0
@@ -108,7 +145,7 @@ var rival_pressure := 0
 var shake_amount := 0.0
 var room_pulse := 0.0
 
-var relic_ids: Array[StringName] = [&"bankers_ring", &"rail_tax"]
+var relic_ids: Array[StringName] = [&"money_ball"]
 var reward_rng := RandomNumberGenerator.new()
 var fx_rng := RandomNumberGenerator.new()
 var next_run_seed := 0
@@ -130,8 +167,28 @@ var run_contract_ids: Array[StringName] = []
 var potted_records: Array[Dictionary] = []
 var moved_start_positions: Dictionary = {}
 var pocket_trace_positions: Dictionary = {}
+var ball_travel_distances: Dictionary = {}
+var ball_travel_last_positions: Dictionary = {}
+var ball_trail_histories: Dictionary = {}
+var pocket_reject_cooldown: Dictionary = {}
 var cue_contact_ids: Dictionary = {}
+var object_ricochet_contact_ids: Dictionary = {}
 var collision_cooldown: Dictionary = {}
+var chain_heat_ready := false
+var active_shot_chain_heat := false
+var scoring_fire_ball_ids: Dictionary = {}
+var fire_trail_points: Array[Dictionary] = []
+var fire_trail_emit_accum := 0.0
+var score_trail_bursts: Array[Dictionary] = []
+var last_ball_drama_active := false
+var last_ball_drama_linger := 0.0
+var last_ball_drama_strength := 0.0
+var last_ball_drama_audio_timer := 0.0
+var last_ball_drama_pulse_timer := 0.0
+var last_ball_drama_ball_id: StringName = &""
+var last_ball_drama_pocket_id: StringName = &""
+var last_ball_drama_ball_pos := Vector2.ZERO
+var last_ball_drama_pocket_pos := Vector2.ZERO
 var pocket_use: Dictionary = {}
 var rail_flash: Dictionary = {}
 var table_notes: Array[String] = []
@@ -148,6 +205,8 @@ var audio_volume := 0.8
 var juice_level := 1
 var show_debug_controls := false
 var camera: Camera2D
+var play_camera_base_position := PLAY_CAMERA_POSITION
+var play_camera_base_zoom := PLAY_CAMERA_ZOOM
 var cue_ball
 var boss_ball
 var ui_layer: CanvasLayer
@@ -181,11 +240,17 @@ var selected_cue_id: StringName = &"house_cue"
 var selected_board_id: StringName = &"casino_green"
 var unlocked_cue_ids: Array[StringName] = [&"house_cue"]
 var unlocked_board_ids: Array[StringName] = [&"casino_green"]
-var unlocked_relic_ids: Array[StringName] = [&"bankers_ring", &"rail_tax", &"center_cut"]
+var unlocked_relic_ids: Array[StringName] = [&"money_ball", &"sniper", &"entropy_scanner"]
 var best_run_score := 0
 var runs_completed := 0
 var furthest_table_reached := 0
 var selected_practice_table := 0
+var meta_chips_total := 0
+var meta_upgrade_levels: Dictionary = {
+	"preview": 0,
+	"power": 0,
+	"extra_shot": 0
+}
 var practice_run := false
 var chalk_inventory: Dictionary = {}
 var equipped_chalk_id: StringName = &""
@@ -202,6 +267,21 @@ var browser_pocket_test_case: Dictionary = {}
 var browser_pocket_test_ball = null
 var browser_pocket_test_started_at := 0.0
 var browser_pocket_test_min_distance := INF
+var browser_pocket_test_lip_deflections := 0
+var browser_pocket_test_returns := 0
+var browser_aim_test_enabled := false
+var browser_aim_test_active := false
+var browser_aim_test_queue: Array[Dictionary] = []
+var browser_aim_test_results: Array[String] = []
+var browser_aim_test_case: Dictionary = {}
+var browser_aim_test_target_ball = null
+var browser_aim_test_expected_target_dir := Vector2.ZERO
+var browser_aim_test_expected_cue_dir := Vector2.ZERO
+var browser_aim_test_actual_target_dir := Vector2.ZERO
+var browser_aim_test_actual_cue_dir := Vector2.ZERO
+var browser_aim_test_result_text := ""
+var browser_aim_test_visual_case := {}
+var browser_aim_test_started_at := 0.0
 var browser_run_test_enabled := false
 var browser_run_test_shops_seen := 0
 var browser_run_test_target_shops := 4
@@ -220,6 +300,9 @@ var menu_practice_route_grid: GridContainer
 var menu_replay_seed_button: Button
 var menu_cue_buttons: Dictionary = {}
 var menu_board_buttons: Dictionary = {}
+var menu_meta_panel: PanelContainer
+var menu_meta_summary: Label
+var menu_meta_rows: Dictionary = {}
 var menu_rules_panel: PanelContainer
 var menu_rules_body: Label
 var pause_panel: PanelContainer
@@ -296,7 +379,7 @@ const CUE_DEFS: Dictionary = {
 	&"bookies_hook": {
 		"name": "Bookie's Hook",
 		"text": "Called pockets and hot-pocket routes pay cash.",
-		"unlock": "Clear Side Bet Alley",
+		"unlock": "Clear Table Challenge Alley",
 		"max_power": 0.96,
 		"min_power": 0.82,
 		"aim": 1.16,
@@ -383,7 +466,7 @@ const BOARD_DEFS: Dictionary = {
 		&"bookie_slate": {
 			"name": "Bookie Slate",
 			"text": "Dim alley cloth with punchy pocket glows. Called lines pay.",
-		"unlock": "Clear Side Bet Alley",
+		"unlock": "Clear Table Challenge Alley",
 		"felt": Color(0.075, 0.12, 0.10),
 		"accent": Color(1.0, 0.52, 0.18),
 		"rail": Color(0.13, 0.065, 0.025),
@@ -445,7 +528,7 @@ const BOARD_DEFS: Dictionary = {
 const CHALK_DEFS: Dictionary = {
 	&"blue_chalk": {
 		"name": "Blue Chalk",
-		"text": "Next shot gets a longer aim preview.",
+		"text": "Next shot gets a longer aim preview and shows two extra contact reads.",
 		"shots": 1
 	},
 	&"red_chalk": {
@@ -455,7 +538,7 @@ const CHALK_DEFS: Dictionary = {
 	},
 	&"safe_chalk": {
 		"name": "Safe Chalk",
-		"text": "Prevents the next scratch reputation loss.",
+		"text": "Prevents the next scratch ball loss.",
 		"shots": 1
 	},
 	&"gold_chalk": {
@@ -476,25 +559,20 @@ const CHALK_DEFS: Dictionary = {
 }
 
 const RELIC_UNLOCKS: Dictionary = {
-	&"bankers_ring": "Unlocked",
-	&"rail_tax": "Unlocked",
+	&"money_ball": "Unlocked",
+	&"sniper": "Unlocked",
+	&"entropy_scanner": "Unlocked",
 	&"center_cut": "Unlocked",
-	&"thunder_break": "Clear Corner Money",
-	&"pocket_monopoly": "Clear Corner Money",
-	&"witchwood_triangle": "Clear The Long Way",
-	&"high_roller_chip": "Clear The Long Way",
-	&"cluster_breaker": "Clear Bar Fight",
-	&"firecracker_ball": "Clear Bar Fight",
-	&"gold_leaf": "Clear Gold Rush",
-	&"dead_eye_lens": "Clear Gold Rush",
-	&"white_gloves": "Clear Bad Felt",
-	&"velvet_rails": "Clear Bad Felt",
-	&"no_loose_ends": "Clear Bad Felt",
-	&"tip_jar": "Defeat Black Eight",
-	&"side_bet_slip": "Clear Side Bet Alley",
-	&"chapel_candle": "Clear Carom Chapel",
-	&"rain_check": "Clear Banker's Wake",
-	&"mirror_hex": "Clear Scratch Parlor"
+	&"rail_coupon": "Clear Corner Money",
+	&"combo_receipt": "Clear Bar Fight",
+	&"spare_ball": "Clear The Long Way",
+	&"chalk_credit": "Clear Gold Rush",
+	&"long_glass": "Clear Banker's Wake",
+	&"hot_hand": "Clear Combo Trial",
+	&"split_lens": "Clear Carom Chapel",
+	&"called_tab": "Clear Table Challenge Alley",
+	&"bumper_policy": "Clear Bar Fight",
+	&"quiet_hands": "Clear Bad Felt"
 }
 
 var tables: Array[Dictionary] = [
@@ -525,7 +603,7 @@ var tables: Array[Dictionary] = [
 		"biome": "Neon back-room",
 		"reward_tier": 1,
 		"objective": &"score_target",
-		"objective_text": "Reach 900 before shots run out.",
+		"objective_text": "Clear the rack. The corner pays loud.",
 		"target_score": 900,
 		"shot_limit": 6,
 		"modifier": &"jackpot",
@@ -614,7 +692,7 @@ var tables: Array[Dictionary] = [
 	},
 	{
 		"id": &"side_bet_alley",
-		"name": "Side Bet Alley",
+		"name": "Table Challenge Alley",
 		"biome": "A narrow bookie's table",
 		"reward_tier": 1,
 		"objective": &"score_target",
@@ -662,7 +740,7 @@ var tables: Array[Dictionary] = [
 		"biome": "Chalk-marked trial table",
 		"reward_tier": 1,
 		"objective": &"tag_trial",
-		"objective_text": "Earn BANK and CAROM tags before the marker closes.",
+		"objective_text": "Earn BANK and CAROM tags before you clear.",
 		"required_tags": [&"BANK", &"CAROM"],
 		"shot_limit": 7,
 		"modifier": &"tag_trial",
@@ -789,17 +867,20 @@ func _ready() -> void:
 	_layout_for_viewport()
 	_show_main_menu()
 	call_deferred("_maybe_start_browser_pocket_test")
+	call_deferred("_maybe_start_browser_aim_test")
 	call_deferred("_maybe_start_browser_run_test")
 
 func _maybe_start_browser_pocket_test() -> void:
-	if not _web_query_has_flag("pocket_test"):
+	if not _web_query_has_flag("pocket_test") and not _web_query_has_flag("pocket_sweep"):
 		return
 	browser_pocket_test_enabled = true
-	_browser_pocket_test_log("POCKET_TEST_BOOT")
+	var sweep := _web_query_has_flag("pocket_sweep")
+	_browser_pocket_test_log("POCKET_TEST_BOOT" + (" sweep" if sweep else ""))
 	selected_practice_table = 0
 	_start_run(true, 1)
-	browser_pocket_test_queue = _browser_pocket_test_cases()
+	browser_pocket_test_queue = _browser_pocket_sweep_cases() if sweep else _browser_pocket_test_cases()
 	browser_pocket_test_results.clear()
+	_browser_pocket_test_log("POCKET_TEST_QUEUE " + str(browser_pocket_test_queue.size()))
 	call_deferred("_start_next_browser_pocket_test")
 
 func _web_query_has_flag(flag: String) -> bool:
@@ -834,6 +915,21 @@ func _browser_pocket_test_cases() -> Array[Dictionary]:
 		{"name": "SW west rail", "pocket": &"SW", "lane": &"left"},
 		{"name": "SE south rail", "pocket": &"SE", "lane": &"bottom"},
 		{"name": "SE east rail", "pocket": &"SE", "lane": &"right"},
+		{"name": "NW slow center", "pocket": &"NW", "lane": &"center", "speed": 190.0},
+		{"name": "NE slow center", "pocket": &"NE", "lane": &"center", "speed": 190.0},
+		{"name": "S slow center", "pocket": &"S", "lane": &"center", "speed": 190.0},
+		{"name": "NW slow rail", "pocket": &"NW", "lane": &"top", "speed": 210.0},
+		{"name": "SE slow rail", "pocket": &"SE", "lane": &"bottom", "speed": 210.0},
+		{"name": "NW pre-mouth slow", "pocket": &"NW", "lane": &"pre_mouth", "speed": 145.0, "clean": true},
+		{"name": "NE pre-mouth slow", "pocket": &"NE", "lane": &"pre_mouth", "speed": 145.0, "clean": true},
+		{"name": "N pre-mouth slow", "pocket": &"N", "lane": &"pre_mouth", "speed": 145.0, "clean": true},
+		{"name": "S pre-mouth slow", "pocket": &"S", "lane": &"pre_mouth", "speed": 145.0, "clean": true},
+		{"name": "NW pre-mouth offset", "pocket": &"NW", "lane": &"pre_mouth_offset", "speed": 145.0, "clean": true},
+		{"name": "SE pre-mouth offset", "pocket": &"SE", "lane": &"pre_mouth_offset", "speed": 145.0, "clean": true},
+		{"name": "NW drop chute", "pocket": &"NW", "lane": &"drop_chute", "speed": 260.0, "clean": true},
+		{"name": "NE drop chute", "pocket": &"NE", "lane": &"drop_chute", "speed": 260.0, "clean": true},
+		{"name": "N drop chute", "pocket": &"N", "lane": &"drop_chute", "speed": 260.0, "clean": true},
+		{"name": "S drop chute", "pocket": &"S", "lane": &"drop_chute", "speed": 260.0, "clean": true},
 		{"name": "NW edge graze", "pocket": &"NW", "lane": &"edge", "expect": false},
 		{"name": "NE edge graze", "pocket": &"NE", "lane": &"edge", "expect": false},
 		{"name": "SW edge graze", "pocket": &"SW", "lane": &"edge", "expect": false},
@@ -842,35 +938,74 @@ func _browser_pocket_test_cases() -> Array[Dictionary]:
 		{"name": "S edge graze", "pocket": &"S", "lane": &"edge", "expect": false}
 	]
 
+func _browser_pocket_sweep_cases() -> Array[Dictionary]:
+	var cases: Array[Dictionary] = []
+	var pocket_ids: Array[StringName] = [&"NW", &"NE", &"SW", &"SE", &"N", &"S"]
+	var speeds := [120.0, 200.0, 340.0, 560.0, 780.0]
+	var lateral_fracs := [-0.68, -0.34, 0.0, 0.34, 0.68]
+	var drift_fracs := [-0.60, -0.20, 0.20, 0.60]
+	for pocket_id in pocket_ids:
+		for speed in speeds:
+			for lateral_frac in lateral_fracs:
+				for drift_frac in drift_fracs:
+					cases.append({
+						"name": "SWEEP " + String(pocket_id) + " v" + str(int(speed)) + " l" + str(snappedf(lateral_frac, 0.01)) + " a" + str(snappedf(drift_frac, 0.01)),
+						"pocket": pocket_id,
+						"lane": &"sweep_clear",
+						"speed": speed,
+						"lateral_frac": lateral_frac,
+						"drift_frac": drift_frac,
+						"clean": true,
+						"timeout": 1.15
+					})
+	return cases
+
 func _start_next_browser_pocket_test() -> void:
 	if not browser_pocket_test_enabled:
+		return
+	var failure_count := 0
+	for result in browser_pocket_test_results:
+		if String(result).contains(":FAIL"):
+			failure_count += 1
+	if _web_query_has_flag("pocket_sweep") and failure_count >= 40:
+		_browser_pocket_test_log("POCKET_TEST_ABORT failures=" + str(failure_count))
+		_browser_pocket_test_log("POCKET_TEST_DONE " + " | ".join(browser_pocket_test_results))
+		state = State.AIMING
 		return
 	if browser_pocket_test_queue.is_empty():
 		_browser_pocket_test_log("POCKET_TEST_DONE " + " | ".join(browser_pocket_test_results))
 		state = State.AIMING
 		return
+	if _web_query_has_flag("pocket_sweep") and browser_pocket_test_results.size() > 0 and browser_pocket_test_results.size() % 100 == 0:
+		_browser_pocket_test_log("POCKET_TEST_PROGRESS " + str(browser_pocket_test_results.size()) + " failures=" + str(failure_count))
 	browser_pocket_test_case = browser_pocket_test_queue.pop_front()
 	var pocket = _pocket_by_id(StringName(browser_pocket_test_case.get("pocket", &"")))
 	if pocket == null:
 		browser_pocket_test_results.append(String(browser_pocket_test_case.get("name", "?")) + ":FAIL no pocket")
 		call_deferred("_start_next_browser_pocket_test")
 		return
-	_prepare_browser_pocket_test_shot(pocket, StringName(browser_pocket_test_case.get("lane", &"center")))
+	_prepare_browser_pocket_test_shot(pocket, StringName(browser_pocket_test_case.get("lane", &"center")), float(browser_pocket_test_case.get("speed", 560.0)))
 
-func _prepare_browser_pocket_test_shot(pocket, lane: StringName) -> void:
+func _prepare_browser_pocket_test_shot(pocket, lane: StringName, speed: float = 560.0) -> void:
 	_clear_balls_for_browser_pocket_test()
 	potted_records.clear()
 	moved_start_positions.clear()
 	pocket_trace_positions.clear()
+	ball_travel_distances.clear()
+	ball_travel_last_positions.clear()
+	ball_trail_histories.clear()
+	pocket_reject_cooldown.clear()
 	cue_contact_ids.clear()
+	object_ricochet_contact_ids.clear()
 	collision_cooldown.clear()
+	active_shot_chain_heat = false
 	current_log = ShotEventLog.new()
 	shot_id += 1
 	shot_seconds = 0.0
 	settle_frames = 0
 	table_shots_used += 1
 	shots_remaining = 99
-	var shot := _browser_pocket_test_vectors(pocket, lane)
+	var shot := _browser_pocket_test_vectors(pocket, lane, speed)
 	var start: Vector2 = shot.get("start", TABLE_RECT.get_center())
 	var velocity: Vector2 = shot.get("velocity", Vector2.ZERO)
 	browser_pocket_test_ball = _spawn_ball({
@@ -884,6 +1019,9 @@ func _prepare_browser_pocket_test_shot(pocket, lane: StringName) -> void:
 	browser_pocket_test_ball.redirect_active(start, velocity, 0.0)
 	moved_start_positions[browser_pocket_test_ball.ball_id] = start
 	pocket_trace_positions[browser_pocket_test_ball.ball_id] = start
+	ball_travel_distances[browser_pocket_test_ball.ball_id] = 0.0
+	ball_travel_last_positions[browser_pocket_test_ball.ball_id] = start
+	ball_trail_histories[browser_pocket_test_ball.ball_id] = [start]
 	current_log.begin_shot(shot_id)
 	current_log.add_event(GameplayEvent.new(GameplayEvent.Type.SHOT_STARTED, shot_id, {
 		"power": velocity.length(),
@@ -895,6 +1033,8 @@ func _prepare_browser_pocket_test_shot(pocket, lane: StringName) -> void:
 	browser_pocket_test_active = true
 	browser_pocket_test_started_at = 0.0
 	browser_pocket_test_min_distance = INF
+	browser_pocket_test_lip_deflections = 0
+	browser_pocket_test_returns = 0
 	_browser_pocket_test_log("POCKET_TEST_CASE " + String(browser_pocket_test_case.get("name", "?")) + " start=" + str(start.round()) + " speed=" + str(int(round(velocity.length()))))
 
 func _clear_balls_for_browser_pocket_test() -> void:
@@ -906,19 +1046,41 @@ func _clear_balls_for_browser_pocket_test() -> void:
 	cue_ball = null
 	boss_ball = null
 
-func _browser_pocket_test_vectors(pocket, lane: StringName) -> Dictionary:
+func _browser_pocket_test_vectors(pocket, lane: StringName, speed: float = 560.0) -> Dictionary:
 	var pos: Vector2 = pocket.global_position
-	var speed := 560.0
 	var start := TABLE_RECT.get_center()
 	var target := pos
+	var inward := _pocket_inward_axis(pocket)
+	var tangent := _pocket_tangent_axis(pocket)
 	match lane:
 		&"edge":
 			var radial := (pos - TABLE_RECT.get_center()).normalized()
-			var tangent := Vector2(-radial.y, radial.x)
+			tangent = Vector2(-radial.y, radial.x)
 			target = pos + tangent * (BALL_RADIUS * 3.25)
 			if not TABLE_RECT.grow(24.0).has_point(target):
 				target = pos - tangent * (BALL_RADIUS * 3.25)
 			start = target - radial * 210.0
+		&"pre_mouth":
+			target = pos
+			start = target + inward * (POCKET_MOUTH_DEPTH + BALL_RADIUS * 0.35)
+		&"pre_mouth_offset":
+			target = pos + tangent * (_pocket_fall_half_width(pocket, speed) * 0.45)
+			start = target + inward * (POCKET_MOUTH_DEPTH + BALL_RADIUS * 0.35)
+		&"drop_chute":
+			start = pos + inward * (_pocket_fall_depth(pocket) + BALL_RADIUS * 0.8)
+			target = pos - inward * (BALL_RADIUS * 1.7)
+		&"sweep_clear":
+			var fall_width := _pocket_fall_half_width(pocket, speed)
+			var lateral_frac := float(browser_pocket_test_case.get("lateral_frac", 0.0))
+			var drift_frac := float(browser_pocket_test_case.get("drift_frac", 0.0))
+			target = pos + inward * (_pocket_fall_depth(pocket) * 0.35) + tangent * (fall_width * lateral_frac)
+			start = pos + inward * (POCKET_MOUTH_DEPTH + BALL_RADIUS * 0.9) + tangent * (fall_width * (lateral_frac + drift_frac))
+		&"sweep_miss":
+			var miss_width := _pocket_fall_half_width(pocket, speed)
+			var miss_lateral_frac := float(browser_pocket_test_case.get("lateral_frac", 1.32))
+			var miss_drift_frac := float(browser_pocket_test_case.get("drift_frac", 0.0))
+			target = pos + inward * (_pocket_fall_depth(pocket) * 0.5) + tangent * (miss_width * miss_lateral_frac)
+			start = pos + inward * (POCKET_MOUTH_DEPTH + BALL_RADIUS * 0.9) + tangent * (miss_width * (miss_lateral_frac + miss_drift_frac))
 		&"top":
 			start = Vector2(pos.x + (150.0 if String(pocket.pocket_id) == "NW" else -150.0), TABLE_RECT.position.y + BALL_RADIUS + 8.0)
 		&"bottom":
@@ -936,6 +1098,160 @@ func _browser_pocket_test_vectors(pocket, lane: StringName) -> Dictionary:
 		dir = Vector2.RIGHT
 	return {"start": start, "velocity": dir * speed}
 
+func _maybe_start_browser_aim_test() -> void:
+	if browser_pocket_test_enabled or not _web_query_has_flag("aim_test"):
+		return
+	browser_aim_test_enabled = true
+	_browser_aim_test_log("AIM_TEST_BOOT")
+	selected_practice_table = 0
+	_start_run(true, 1)
+	browser_aim_test_queue = _browser_aim_test_cases()
+	browser_aim_test_results.clear()
+	call_deferred("_start_next_browser_aim_test")
+
+func _browser_aim_test_cases() -> Array[Dictionary]:
+	var cases: Array[Dictionary] = []
+	var offsets := [0.0, -10.0, 10.0, -22.0, 22.0, -32.0, 32.0]
+	for offset in offsets:
+		cases.append({"name": "cut " + str(int(offset)) + " p620", "offset": offset, "power": 620.0, "spin": Vector2.ZERO})
+	for offset in [-28.0, 28.0]:
+		cases.append({"name": "thin " + str(int(offset)) + " p860", "offset": offset, "power": 860.0, "spin": Vector2.ZERO})
+	cases.append({"name": "side right cut", "offset": 24.0, "power": 760.0, "spin": Vector2(1.0, 0.0)})
+	cases.append({"name": "side left cut", "offset": -24.0, "power": 760.0, "spin": Vector2(-1.0, 0.0)})
+	cases.append({"name": "follow cut", "offset": 22.0, "power": 760.0, "spin": Vector2(0.0, 1.0)})
+	cases.append({"name": "draw cut", "offset": 22.0, "power": 760.0, "spin": Vector2(0.0, -1.0)})
+	return cases
+
+func _browser_aim_test_log(message: String) -> void:
+	print(message)
+	if OS.get_name() != "Web":
+		return
+	var js_message := JSON.stringify(message)
+	JavaScriptBridge.eval("window.__hexAimTestLog = window.__hexAimTestLog || []; window.__hexAimTestLog.push(" + js_message + "); document.title = " + JSON.stringify("HexHustler " + message.left(48)) + ";", true)
+
+func _start_next_browser_aim_test() -> void:
+	if not browser_aim_test_enabled:
+		return
+	if browser_aim_test_queue.is_empty():
+		_browser_aim_test_log("AIM_TEST_DONE " + " | ".join(browser_aim_test_results))
+		browser_aim_test_enabled = false
+		state = State.AIMING
+		return
+	browser_aim_test_case = browser_aim_test_queue.pop_front()
+	browser_aim_test_result_text = "RUNNING " + String(browser_aim_test_case.get("name", "?"))
+	browser_aim_test_actual_target_dir = Vector2.ZERO
+	browser_aim_test_actual_cue_dir = Vector2.ZERO
+	_prepare_browser_aim_test_shot(browser_aim_test_case)
+
+func _prepare_browser_aim_test_shot(test_case: Dictionary) -> void:
+	_clear_balls_for_browser_pocket_test()
+	potted_records.clear()
+	moved_start_positions.clear()
+	pocket_trace_positions.clear()
+	ball_travel_distances.clear()
+	ball_travel_last_positions.clear()
+	ball_trail_histories.clear()
+	pocket_reject_cooldown.clear()
+	cue_contact_ids.clear()
+	object_ricochet_contact_ids.clear()
+	collision_cooldown.clear()
+	active_shot_chain_heat = false
+	current_log = ShotEventLog.new()
+	shot_id += 1
+	shot_seconds = 0.0
+	settle_frames = 0
+	shots_remaining = 99
+	var aim_dir := Vector2.RIGHT
+	var cue_pos := Vector2(TABLE_RECT.position.x + TABLE_RECT.size.x * 0.28, TABLE_RECT.get_center().y)
+	var target_pos := cue_pos + Vector2(210.0, float(test_case.get("offset", 22.0)))
+	cue_ball = _spawn_ball({
+		"id": &"aim_test_cue",
+		"kind": &"cue",
+		"pos": cue_pos,
+		"radius": BALL_RADIUS
+	})
+	browser_aim_test_target_ball = _spawn_ball({
+		"id": &"aim_test_target",
+		"kind": &"normal",
+		"pos": target_pos,
+		"score": 100,
+		"color": Color(1.0, 0.64, 0.32),
+		"radius": BALL_RADIUS
+	})
+	cue_ball.redirect_active(cue_pos, Vector2.ZERO, 0.0)
+	browser_aim_test_target_ball.redirect_active(target_pos, Vector2.ZERO, 0.0)
+	cue_spin = test_case.get("spin", Vector2.ZERO)
+	current_shot_spin = cue_spin
+	current_shot_aim_dir = aim_dir
+	cue_spin_contact_applied = false
+	var preview := _first_contact_preview(aim_dir, 360.0)
+	browser_aim_test_expected_target_dir = preview.get("target_dir", Vector2.ZERO)
+	browser_aim_test_expected_cue_dir = preview.get("cue_ricochet_dir", Vector2.ZERO)
+	browser_aim_test_visual_case = {
+		"cue_pos": cue_pos,
+		"target_pos": target_pos,
+		"preview_cue_center": preview.get("cue_center", cue_pos),
+		"preview_target_dir": browser_aim_test_expected_target_dir,
+		"preview_cue_dir": browser_aim_test_expected_cue_dir,
+		"name": String(test_case.get("name", "?"))
+	}
+	current_log.begin_shot(shot_id)
+	current_log.add_event(GameplayEvent.new(GameplayEvent.Type.SHOT_STARTED, shot_id, {
+		"aim_test": true,
+		"spin": cue_spin
+	}, cue_ball.global_position))
+	for ball in _active_balls():
+		moved_start_positions[ball.ball_id] = ball.global_position
+		ball_travel_distances[ball.ball_id] = 0.0
+		ball_travel_last_positions[ball.ball_id] = ball.global_position
+		ball_trail_histories[ball.ball_id] = [ball.global_position]
+		pocket_trace_positions[ball.ball_id] = ball.global_position
+		ball_travel_distances[ball.ball_id] = 0.0
+		ball_travel_last_positions[ball.ball_id] = ball.global_position
+		ball_trail_histories[ball.ball_id] = [ball.global_position]
+	cue_ball.angular_velocity = -cue_spin.x * 18.0 * (1.0 + run_cue_spin_bonus)
+	cue_ball.apply_central_impulse(_shot_launch_impulse(aim_dir, float(test_case.get("power", 860.0)), cue_spin))
+	state = State.SHOT_IN_MOTION
+	browser_aim_test_active = true
+	browser_aim_test_started_at = 0.0
+	_browser_aim_test_log("AIM_TEST_CASE " + String(test_case.get("name", "?")) + " target_preview=" + str(browser_aim_test_expected_target_dir.round()) + " cue_preview=" + str(browser_aim_test_expected_cue_dir.round()))
+
+func _update_browser_aim_test(delta: float) -> void:
+	if not browser_aim_test_active:
+		return
+	browser_aim_test_started_at += delta
+	var case_name := String(browser_aim_test_case.get("name", "?"))
+	if cue_ball == null or not is_instance_valid(cue_ball) or browser_aim_test_target_ball == null or not is_instance_valid(browser_aim_test_target_ball):
+		browser_aim_test_results.append(case_name + ":FAIL missing ball")
+		browser_aim_test_active = false
+		call_deferred("_start_next_browser_aim_test")
+		return
+	var target_speed: float = browser_aim_test_target_ball.linear_velocity.length()
+	var cue_speed: float = cue_ball.linear_velocity.length()
+	if browser_aim_test_started_at >= 0.45 and target_speed > 35.0:
+		var target_dir: Vector2 = browser_aim_test_target_ball.linear_velocity.normalized()
+		var target_error := rad_to_deg(absf(target_dir.angle_to(browser_aim_test_expected_target_dir)))
+		var cue_error := 0.0
+		if cue_speed > 35.0 and browser_aim_test_expected_cue_dir.length() > 0.01:
+			browser_aim_test_actual_cue_dir = cue_ball.linear_velocity.normalized()
+			cue_error = rad_to_deg(absf(browser_aim_test_actual_cue_dir.angle_to(browser_aim_test_expected_cue_dir)))
+		else:
+			browser_aim_test_actual_cue_dir = Vector2.ZERO
+		browser_aim_test_actual_target_dir = target_dir
+		var result := "PASS" if target_error <= 6.0 and cue_error <= 14.0 else "FAIL"
+		browser_aim_test_result_text = result + " " + case_name + " target " + str(snappedf(target_error, 0.1)) + " cue " + str(snappedf(cue_error, 0.1))
+		browser_aim_test_results.append(case_name + ":" + result + " target=" + str(int(round(target_error))) + " cue=" + str(int(round(cue_error))))
+		_browser_aim_test_log("AIM_TEST_" + result + " " + case_name + " target_error=" + str(snappedf(target_error, 0.1)) + " cue_error=" + str(snappedf(cue_error, 0.1)) + " target_speed=" + str(int(round(target_speed))) + " cue_speed=" + str(int(round(cue_speed))))
+		browser_aim_test_active = false
+		call_deferred("_start_next_browser_aim_test")
+		return
+	if browser_aim_test_started_at >= 1.8 or state != State.SHOT_IN_MOTION:
+		browser_aim_test_results.append(case_name + ":FAIL no contact")
+		browser_aim_test_result_text = "FAIL " + case_name + " no contact"
+		_browser_aim_test_log("AIM_TEST_FAIL " + case_name + " no contact target_speed=" + str(int(round(target_speed))) + " cue_speed=" + str(int(round(cue_speed))))
+		browser_aim_test_active = false
+		call_deferred("_start_next_browser_aim_test")
+
 func _update_browser_pocket_test(delta: float) -> void:
 	if not browser_pocket_test_active:
 		return
@@ -952,18 +1268,24 @@ func _update_browser_pocket_test(delta: float) -> void:
 		browser_pocket_test_min_distance = minf(browser_pocket_test_min_distance, browser_pocket_test_ball.global_position.distance_to(target_pocket.global_position))
 	if browser_pocket_test_ball.potted:
 		var result := "PASS" if expected_pot else "FAIL sucked"
+		var rail_hits := current_log.count_type(GameplayEvent.Type.RAIL_HIT) if current_log != null else 0
+		if expected_pot and browser_pocket_test_returns > 0:
+			result = "FAIL returned"
+		elif expected_pot and bool(browser_pocket_test_case.get("clean", false)) and (browser_pocket_test_lip_deflections > 0 or rail_hits > 0):
+			result = "FAIL bounced"
 		browser_pocket_test_results.append(case_name + ":" + result)
-		_browser_pocket_test_log("POCKET_TEST_" + result.replace(" ", "_") + " " + case_name)
+		_browser_pocket_test_log("POCKET_TEST_" + result.replace(" ", "_") + " " + case_name + " deflections=" + str(browser_pocket_test_lip_deflections) + " rails=" + str(rail_hits) + " returns=" + str(browser_pocket_test_returns))
 		browser_pocket_test_active = false
 		call_deferred("_start_next_browser_pocket_test")
 		return
-	if browser_pocket_test_started_at >= 2.6 or state != State.SHOT_IN_MOTION:
+	var timeout := float(browser_pocket_test_case.get("timeout", 2.6))
+	if browser_pocket_test_started_at >= timeout or state != State.SHOT_IN_MOTION:
 		var pos: Vector2 = browser_pocket_test_ball.global_position
 		var vel: Vector2 = browser_pocket_test_ball.linear_velocity
 		var recent := _recent_event_lines(8).replace("\n", " / ")
 		if expected_pot:
-			browser_pocket_test_results.append(case_name + ":FAIL pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))))
-			_browser_pocket_test_log("POCKET_TEST_FAIL " + case_name + " pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " recent=" + recent)
+			browser_pocket_test_results.append(case_name + ":FAIL pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " returns=" + str(browser_pocket_test_returns))
+			_browser_pocket_test_log("POCKET_TEST_FAIL " + case_name + " pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " returns=" + str(browser_pocket_test_returns) + " recent=" + recent)
 		else:
 			browser_pocket_test_results.append(case_name + ":PASS miss")
 			_browser_pocket_test_log("POCKET_TEST_PASS_MISS " + case_name + " pos=" + str(pos.round()) + " min=" + str(int(round(browser_pocket_test_min_distance))))
@@ -1149,9 +1471,170 @@ func _layout_play_camera(viewport_size: Vector2) -> void:
 	)
 	var zoom := minf(available.size.x / table_bounds.size.x, available.size.y / table_bounds.size.y)
 	zoom = clampf(zoom, 0.90, 1.42)
-	camera.zoom = Vector2(zoom, zoom)
+	play_camera_base_zoom = zoom
 	var desired_screen_center := available.position + available.size * 0.5
-	camera.position = table_bounds.get_center() - (desired_screen_center - viewport_size * 0.5) / zoom
+	play_camera_base_position = table_bounds.get_center() - (desired_screen_center - viewport_size * 0.5) / zoom
+	_apply_camera_drama_transform(1.0)
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
+
+func _update_last_ball_drama(delta: float) -> void:
+	if browser_pocket_test_enabled or browser_aim_test_enabled or browser_run_test_enabled:
+		_end_last_ball_drama(true)
+		return
+	if juice_level <= 0:
+		_end_last_ball_drama(true)
+		return
+	if state != State.SHOT_IN_MOTION:
+		_fade_last_ball_drama(delta * 2.8)
+		return
+	if last_ball_drama_linger > 0.0:
+		last_ball_drama_linger = maxf(0.0, last_ball_drama_linger - delta)
+		last_ball_drama_strength = maxf(last_ball_drama_strength, clampf(last_ball_drama_linger / 0.85, 0.0, 1.0))
+		_apply_last_ball_time_scale(delta)
+		return
+	var ball = _last_required_ball()
+	if ball == null or not is_instance_valid(ball) or ball.potted:
+		_fade_last_ball_drama(delta * 2.8)
+		return
+	var candidate := _last_ball_drama_candidate(ball)
+	if candidate.is_empty():
+		_fade_last_ball_drama(delta * 3.2)
+		return
+	last_ball_drama_active = true
+	last_ball_drama_ball_id = ball.ball_id
+	var pocket = candidate.get("pocket")
+	last_ball_drama_pocket_id = pocket.pocket_id
+	last_ball_drama_ball_pos = ball.global_position
+	last_ball_drama_pocket_pos = pocket.global_position
+	last_ball_drama_strength = maxf(last_ball_drama_strength, float(candidate.get("strength", 0.0)))
+	last_ball_drama_strength = lerpf(last_ball_drama_strength, float(candidate.get("strength", 0.0)), clampf(delta * 7.0, 0.0, 1.0))
+	last_ball_drama_audio_timer -= delta
+	last_ball_drama_pulse_timer -= delta
+	if last_ball_drama_audio_timer <= 0.0:
+		_play_last_ball_crescendo(last_ball_drama_strength)
+		last_ball_drama_audio_timer = lerpf(0.30, 0.12, last_ball_drama_strength)
+	if last_ball_drama_pulse_timer <= 0.0:
+		_spawn_pulse(last_ball_drama_pocket_pos, Color(1.0, 0.82, 0.22), 16.0 + last_ball_drama_strength * 12.0, 82.0 + last_ball_drama_strength * 72.0)
+		last_ball_drama_pulse_timer = lerpf(0.22, 0.08, last_ball_drama_strength)
+	_apply_last_ball_time_scale(delta)
+
+func _fade_last_ball_drama(amount: float) -> void:
+	if last_ball_drama_strength > 0.0:
+		last_ball_drama_strength = maxf(0.0, last_ball_drama_strength - amount)
+	if last_ball_drama_strength <= 0.01:
+		last_ball_drama_active = false
+		last_ball_drama_ball_id = &""
+		last_ball_drama_pocket_id = &""
+		last_ball_drama_audio_timer = 0.0
+		last_ball_drama_pulse_timer = 0.0
+		Engine.time_scale = 1.0
+	else:
+		_apply_last_ball_time_scale(amount)
+
+func _end_last_ball_drama(force: bool = false) -> void:
+	last_ball_drama_active = false
+	last_ball_drama_linger = 0.0
+	last_ball_drama_audio_timer = 0.0
+	last_ball_drama_pulse_timer = 0.0
+	last_ball_drama_ball_id = &""
+	last_ball_drama_pocket_id = &""
+	if force:
+		last_ball_drama_strength = 0.0
+		Engine.time_scale = 1.0
+
+func _complete_last_ball_drama(pos: Vector2) -> void:
+	if juice_level <= 0:
+		return
+	last_ball_drama_linger = 0.95
+	last_ball_drama_strength = 1.0
+	last_ball_drama_pocket_pos = pos
+	_spawn_pulse(pos, Color(1.0, 0.92, 0.22), 42, 230)
+	_spawn_pulse(pos, Color(0.36, 1.0, 0.86), 24, 148)
+	_show_float("FINAL DROP", pos + Vector2(0, -150), Color(1.0, 0.92, 0.32), 34)
+	_play_audio_cue(&"clear", 1.0)
+	_play_last_ball_crescendo(1.0)
+	shake_amount = maxf(shake_amount, 10.0)
+
+func _apply_last_ball_time_scale(delta: float) -> void:
+	var target := lerpf(1.0, LAST_BALL_DRAMA_TIME_SCALE, clampf(last_ball_drama_strength, 0.0, 1.0))
+	var alpha := clampf(maxf(delta, 0.016) * 4.8, 0.0, 1.0)
+	Engine.time_scale = lerpf(Engine.time_scale, target, alpha)
+	if absf(Engine.time_scale - 1.0) < 0.015 and target >= 0.99:
+		Engine.time_scale = 1.0
+
+func _apply_camera_drama_transform(delta: float) -> void:
+	if camera == null:
+		return
+	var strength := clampf(last_ball_drama_strength * _juice_vfx_scale(), 0.0, 1.0)
+	var target_zoom := play_camera_base_zoom * (1.0 + LAST_BALL_DRAMA_ZOOM * strength)
+	var target_pos := play_camera_base_position
+	if strength > 0.01 and last_ball_drama_ball_pos != Vector2.ZERO and last_ball_drama_pocket_pos != Vector2.ZERO:
+		var focus := last_ball_drama_ball_pos.lerp(last_ball_drama_pocket_pos, 0.62)
+		target_pos = play_camera_base_position.lerp(focus, 0.42 * strength)
+	var alpha := clampf(maxf(delta, 0.016) * 7.0, 0.0, 1.0)
+	camera.zoom = camera.zoom.lerp(Vector2(target_zoom, target_zoom), alpha)
+	camera.position = camera.position.lerp(target_pos, alpha)
+
+func _last_required_ball():
+	var candidate = null
+	var count := 0
+	for ball in _active_balls():
+		if _ball_counts_for_table_clear(ball):
+			candidate = ball
+			count += 1
+	return candidate if count == 1 else null
+
+func _ball_counts_for_table_clear(ball) -> bool:
+	if ball == null or not is_instance_valid(ball) or ball.potted:
+		return false
+	return ball.kind != &"cue" and ball.kind != &"boss"
+
+func _is_final_required_ball(ball) -> bool:
+	if not _ball_counts_for_table_clear(ball):
+		return false
+	var final_ball = _last_required_ball()
+	return final_ball != null and is_instance_valid(final_ball) and final_ball == ball
+
+func _last_ball_drama_candidate(ball) -> Dictionary:
+	var speed: float = ball.linear_velocity.length()
+	if speed < LAST_BALL_DRAMA_MIN_SPEED:
+		return {}
+	var pocket = _nearest_pocket(ball.global_position)
+	if pocket == null:
+		return {}
+	var distance: float = ball.global_position.distance_to(pocket.global_position)
+	if distance > LAST_BALL_DRAMA_TRIGGER_DISTANCE:
+		return {}
+	var to_pocket: Vector2 = pocket.global_position - ball.global_position
+	if to_pocket.length_squared() <= 0.01:
+		return {}
+	var velocity_dir: Vector2 = ball.linear_velocity.normalized()
+	var alignment: float = velocity_dir.dot(to_pocket.normalized())
+	var local := _pocket_local_position(ball.global_position, pocket)
+	var depth := float(local.get("depth", 9999.0))
+	var lateral := absf(float(local.get("lateral", 9999.0)))
+	var mouth_width := _pocket_mouth_half_width(pocket) + BALL_RADIUS * 0.55
+	var in_mouth_lane := depth <= POCKET_MOUTH_DEPTH + BALL_RADIUS * 1.5 and depth >= -POCKET_CUP_DEPTH * 2.0 and lateral <= mouth_width
+	if alignment < 0.54 and not in_mouth_lane:
+		return {}
+	var distance_t := clampf(1.0 - distance / LAST_BALL_DRAMA_TRIGGER_DISTANCE, 0.0, 1.0)
+	var alignment_t := clampf((alignment - 0.45) / 0.55, 0.0, 1.0)
+	var mouth_t := clampf(1.0 - lateral / maxf(1.0, mouth_width), 0.0, 1.0) if in_mouth_lane else 0.0
+	var speed_t := clampf((speed - LAST_BALL_DRAMA_MIN_SPEED) / 520.0, 0.0, 1.0)
+	var strength := clampf(distance_t * 0.58 + alignment_t * 0.24 + mouth_t * 0.28 + speed_t * 0.10, 0.0, 1.0)
+	if strength < 0.22:
+		return {}
+	return {"pocket": pocket, "strength": strength}
+
+func _play_last_ball_crescendo(strength: float) -> void:
+	if audio_muted or audio_volume <= 0.01:
+		return
+	var t := clampf(strength, 0.0, 1.0)
+	_play_generated_sound(520.0 + 420.0 * t, 0.16 + 0.08 * t, 0.035 + 0.035 * t, &"sine")
+	if t > 0.58:
+		_play_generated_sound(780.0 + 520.0 * t, 0.12, 0.025 + 0.025 * t, &"sine")
 
 func _layout_hud(viewport_size: Vector2) -> void:
 	var relic_width := clampf(viewport_size.x * 0.22, 250.0, 310.0)
@@ -1383,11 +1866,12 @@ func _build_main_menu() -> void:
 
 	var title := _new_label("HexHustler", 30, Color(1.0, 0.82, 0.28))
 	menu_root.add_child(title)
-	var subtitle := _new_label("Cursed tables. Drafted relics. One clean shot away from ruin.", 12, Color(0.82, 0.92, 0.95))
+	var subtitle := _new_label("Clear tables. Take optional wagers. Keep balls alive.", 12, Color(0.82, 0.92, 0.95))
 	menu_root.add_child(subtitle)
 
 	menu_summary = _new_label("", 11, Color(0.98, 0.9, 0.72))
 	menu_root.add_child(menu_summary)
+	_build_menu_meta_panel(menu_root)
 	_build_menu_loadout_preview(menu_root)
 	menu_loadout_panel.visible = false
 
@@ -1479,6 +1963,86 @@ func _build_main_menu() -> void:
 	if show_debug_controls:
 		_build_menu_practice_route(menu_root)
 	_build_menu_rules_panel()
+
+func _build_menu_meta_panel(root: VBoxContainer) -> void:
+	menu_meta_panel = PanelContainer.new()
+	menu_meta_panel.custom_minimum_size = Vector2(1120, 174)
+	menu_meta_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.045, 0.026, 0.048, 0.93), Color(0.78, 0.52, 1.0, 0.72), 2))
+	root.add_child(menu_meta_panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	menu_meta_panel.add_child(margin)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	margin.add_child(box)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 14)
+	box.add_child(header)
+
+	var title := _new_label("Back Room Training", 18, Color(1.0, 0.84, 0.34))
+	title.custom_minimum_size = Vector2(310, 0)
+	header.add_child(title)
+
+	menu_meta_summary = _new_label("", 12, Color(0.86, 0.96, 1.0))
+	menu_meta_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(menu_meta_summary)
+
+	var reset_button := Button.new()
+	reset_button.text = "Reset Allocation"
+	reset_button.custom_minimum_size = Vector2(210, 42)
+	reset_button.tooltip_text = "Refund all Back Room chips so you can reallocate them before a run."
+	_set_button_font_size(reset_button, 16)
+	reset_button.pressed.connect(_on_meta_reset_pressed)
+	header.add_child(reset_button)
+
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 6)
+	box.add_child(rows)
+	for id in ["preview", "power", "extra_shot"]:
+		rows.add_child(_build_meta_upgrade_row(id))
+
+func _build_meta_upgrade_row(id: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.custom_minimum_size = Vector2(0, 34)
+
+	var label := _new_label("", 12, Color(0.94, 0.92, 0.86))
+	label.custom_minimum_size = Vector2(590, 0)
+	row.add_child(label)
+
+	var minus_button := Button.new()
+	minus_button.text = "-"
+	minus_button.custom_minimum_size = Vector2(44, 34)
+	minus_button.tooltip_text = "Refund one chip from this upgrade."
+	_set_button_font_size(minus_button, 17)
+	minus_button.pressed.connect(_on_meta_upgrade_minus.bind(id))
+	row.add_child(minus_button)
+
+	var plus_button := Button.new()
+	plus_button.text = "+"
+	plus_button.custom_minimum_size = Vector2(44, 34)
+	plus_button.tooltip_text = "Spend one Back Room chip on this upgrade."
+	_set_button_font_size(plus_button, 17)
+	plus_button.pressed.connect(_on_meta_upgrade_plus.bind(id))
+	row.add_child(plus_button)
+
+	var readout := _new_label("", 12, Color(1.0, 0.82, 0.36))
+	readout.custom_minimum_size = Vector2(150, 0)
+	row.add_child(readout)
+
+	menu_meta_rows[id] = {
+		"label": label,
+		"minus": minus_button,
+		"plus": plus_button,
+		"readout": readout
+	}
+	return row
 
 func _menu_column(title_text: String) -> VBoxContainer:
 	var box := VBoxContainer.new()
@@ -1627,7 +2191,7 @@ func _build_menu_rules_panel() -> void:
 	box.add_child(close_button)
 
 func _menu_rules_text() -> String:
-	return "Every table is an encounter. Clear the route before your reputation runs dry.\n\nAim from the cue ball, hold left mouse to charge, release to shoot. Right click a pocket to call it. B cycles a side bet, Q/E set side English, W/S set follow or draw, and X resets spin. Softer shots are often safer than a full break.\n\nEach room takes a buy-in and pays a pot when cleared. Missed side bets and failed rooms can push you into debt; later cash pays debt before it reaches your pocket.\n\nThe house pays for intent: bank shots, kicks, caroms, kiss pots, long pots, soft touches, power shots, clean pocket control, called pockets, and multi-pots all feed score tags. Style is a capped score multiplier, so stylish routes make later payouts louder.\n\n" + _tag_glossary_text() + "\n\nGold balls pay cash. Cursed balls hurt reputation unless a relic turns the curse. Bomb balls burst. Marked balls crack the Black Eight shield; once the shield breaks, damage the Eight and pot it while vulnerable.\n\nAfter a clear, choose an offer: relic, chalk, cash, cue work, table contract, Remove Curse, or House Favor. Favors spend run cash on reputation, style, or extra chalk. Cue work and contracts last for the run. Hover reward offers to see what shot pattern they want.\n\nPermanent clears unlock new cues, boards, and relics that can appear in later drafts.\n\nEsc opens the pause table."
+	return "Clear each table before your balls run out.\n\nAim from the cue ball, hold left mouse to charge, release to shoot. Right click a pocket to call it. Q/E and W/S set English, and X resets spin. Before each table you may take one optional cash challenge.\n\nLose 1 ball when the cue ball drops, or when you completely whiff and pot nothing. If you pot exactly one ball and scratch, you still lose 1 ball. If you pot 2+ balls and scratch, the scratch is forgiven.\n\nThe house pays for intent: bank shots, kicks, caroms, kiss pots, long pots, soft touches, power shots, clean pocket control, called pockets, ricochet pots, chain pots, and multi-pots all feed score tags.\n\n" + _tag_glossary_text() + "\n\nGold balls pay cash. Cursed balls are bonus-value risk pieces. Bomb balls burst. Marked balls crack the Black Eight shield; once the shield breaks, damage the Eight and pot it while vulnerable.\n\nAfter a clear, choose an offer: relic, chalk, cash, cue work, or table contract. Hover reward offers to see what shot pattern they want.\n\nEsc opens the pause table."
 
 func _show_menu_rules() -> void:
 	if menu_rules_panel != null:
@@ -1667,11 +2231,134 @@ func _refresh_main_menu() -> void:
 	_rebuild_menu_cards(menu_board_list, BOARD_DEFS, unlocked_board_ids, selected_board_id, false)
 	_rebuild_relic_collection()
 	_rebuild_practice_route_grid()
+	_refresh_meta_panel()
 	menu_summary.text = _menu_house_case_text()
 	_refresh_menu_loadout_preview()
 	if menu_replay_seed_button != null:
 		menu_replay_seed_button.disabled = last_run_seed <= 0
 		menu_replay_seed_button.text = "Replay " + str(last_run_seed) if last_run_seed > 0 else "Replay Seed"
+
+func _refresh_meta_panel() -> void:
+	if menu_meta_panel == null:
+		return
+	if menu_meta_summary != null:
+		menu_meta_summary.text = "Chips " + str(_meta_unspent_chips()) + "/" + str(meta_chips_total) + " free  |  " + _meta_effect_summary()
+	for id in ["preview", "power", "extra_shot"]:
+		var controls: Dictionary = menu_meta_rows.get(id, {})
+		if controls.is_empty():
+			continue
+		var label := controls.get("label") as Label
+		var minus_button := controls.get("minus") as Button
+		var plus_button := controls.get("plus") as Button
+		var readout := controls.get("readout") as Label
+		var def: Dictionary = META_UPGRADES.get(id, {})
+		var level := _meta_upgrade_level(id)
+		var max_level := int(def.get("max", 0))
+		if label != null:
+			label.text = String(def.get("name", id)) + " - " + String(def.get("text", "")) + "  " + _meta_upgrade_effect_text(id)
+		if readout != null:
+			readout.text = str(level) + "/" + str(max_level)
+		if minus_button != null:
+			minus_button.disabled = level <= 0
+		if plus_button != null:
+			plus_button.disabled = level >= max_level or _meta_unspent_chips() <= 0
+
+func _meta_upgrade_level(id: String) -> int:
+	var def: Dictionary = META_UPGRADES.get(id, {})
+	return clampi(int(meta_upgrade_levels.get(id, 0)), 0, int(def.get("max", 0)))
+
+func _meta_spent_chips() -> int:
+	var spent := 0
+	for id in META_UPGRADES.keys():
+		spent += _meta_upgrade_level(String(id))
+	return spent
+
+func _meta_unspent_chips() -> int:
+	return maxi(0, meta_chips_total - _meta_spent_chips())
+
+func _clamp_meta_allocation_to_budget() -> void:
+	for id in META_UPGRADES.keys():
+		var id_text := String(id)
+		meta_upgrade_levels[id_text] = _meta_upgrade_level(id_text)
+	while _meta_spent_chips() > meta_chips_total:
+		var trimmed := false
+		for id in META_UPGRADES.keys():
+			var id_text := String(id)
+			if _meta_upgrade_level(id_text) > 0:
+				meta_upgrade_levels[id_text] = _meta_upgrade_level(id_text) - 1
+				trimmed = true
+				break
+		if not trimmed:
+			break
+
+func _meta_preview_bonus() -> float:
+	return float(_meta_upgrade_level("preview")) * float(META_UPGRADES["preview"].get("step", 0.0))
+
+func _meta_power_bonus() -> float:
+	return float(_meta_upgrade_level("power")) * float(META_UPGRADES["power"].get("step", 0.0))
+
+func _meta_extra_shot_bonus() -> int:
+	return _meta_upgrade_level("extra_shot")
+
+func _meta_max_balls() -> int:
+	return STARTING_BALLS_LEFT + _meta_extra_shot_bonus()
+
+func _meta_effect_summary() -> String:
+	var parts: Array[String] = []
+	if _meta_preview_bonus() > 0.0:
+		parts.append("Preview +" + str(int(round(_meta_preview_bonus() * 100.0))) + "%")
+	if _meta_power_bonus() > 0.0:
+		parts.append("Power +" + str(int(round(_meta_power_bonus() * 100.0))) + "%")
+	if _meta_extra_shot_bonus() > 0:
+		parts.append("Balls cap +" + str(_meta_extra_shot_bonus()))
+	if parts.is_empty():
+		return "No training allocated"
+	return ", ".join(parts)
+
+func _meta_upgrade_effect_text(id: String) -> String:
+	match id:
+		"preview":
+			return "+" + str(int(round(float(META_UPGRADES[id].get("step", 0.0)) * 100.0))) + "% per chip"
+		"power":
+			return "+" + str(int(round(float(META_UPGRADES[id].get("step", 0.0)) * 100.0))) + "% per chip"
+		"extra_shot":
+			return "+1 ball cap and table refill"
+		_:
+			return ""
+
+func _on_meta_upgrade_plus(id: String) -> void:
+	if _meta_unspent_chips() <= 0:
+		return
+	var def: Dictionary = META_UPGRADES.get(id, {})
+	var level := _meta_upgrade_level(id)
+	if level >= int(def.get("max", 0)):
+		return
+	meta_upgrade_levels[id] = level + 1
+	_save_progress()
+	_refresh_main_menu()
+
+func _on_meta_upgrade_minus(id: String) -> void:
+	var level := _meta_upgrade_level(id)
+	if level <= 0:
+		return
+	meta_upgrade_levels[id] = level - 1
+	_save_progress()
+	_refresh_main_menu()
+
+func _on_meta_reset_pressed() -> void:
+	for id in META_UPGRADES.keys():
+		meta_upgrade_levels[String(id)] = 0
+	_save_progress()
+	_refresh_main_menu()
+
+func _award_meta_chips(amount: int, reason: String) -> void:
+	if practice_run or amount <= 0:
+		return
+	meta_chips_total += amount
+	table_notes.append(reason + ": +" + str(amount) + " chip")
+	_save_progress()
+	if run_active:
+		_show_float("+" + str(amount) + " CHIP", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 48), Color(0.82, 0.60, 1.0), 24)
 
 func _rebuild_menu_cards(list: VBoxContainer, defs: Dictionary, unlocked_ids: Array[StringName], selected_id: StringName, is_cue: bool) -> void:
 	for child in list.get_children():
@@ -1694,9 +2381,9 @@ func _rebuild_menu_cards(list: VBoxContainer, defs: Dictionary, unlocked_ids: Ar
 		var label := status_text + "  " + String(def.get("name", id)) + "\n" + (_cue_play_hint(id) if is_cue else _board_play_hint(id))
 		button.tooltip_text = String(def.get("name", id)) + "\n" + String(def.get("text", "")) + "\n" + visual_text + "\n" + trait_text + "\nPlaybook: " + (_cue_play_hint(id) if is_cue else _board_play_hint(id))
 		if not unlocked:
-			label = _collection_status_line(false, false, false) + "  " + String(def.get("name", id)) + "\nMarker: " + String(def.get("unlock", "Locked"))
+			label = _collection_status_line(false, false, false) + "  " + String(def.get("name", id)) + "\nUnlock: " + String(def.get("unlock", "Locked"))
 			button.disabled = true
-			button.tooltip_text = String(def.get("name", id)) + "\nMarker: " + String(def.get("unlock", "Locked")) + "\n" + visual_text + "\n" + trait_text + "\nPlaybook: " + (_cue_play_hint(id) if is_cue else _board_play_hint(id))
+			button.tooltip_text = String(def.get("name", id)) + "\nUnlock: " + String(def.get("unlock", "Locked")) + "\n" + visual_text + "\n" + trait_text + "\nPlaybook: " + (_cue_play_hint(id) if is_cue else _board_play_hint(id))
 		button.text = label
 		var card_fill := Color(0.08, 0.035, 0.10, 0.82)
 		var card_border := _cue_accent(id) if is_cue else Color(def.get("accent", Color(0.63, 0.38, 0.88)))
@@ -1754,8 +2441,8 @@ func _rebuild_relic_collection() -> void:
 			label.text = _collection_status_line(true, false, freshly_unlocked) + "  " + relic_engine.get_display_name(id) + "\n" + relic_engine.get_metadata_line(id) + "\n" + relic_engine.get_description(id)
 			panel.tooltip_text = relic_engine.get_display_name(id) + "\n" + relic_engine.get_metadata_line(id) + "\n" + relic_engine.get_description(id) + "\nPlaybook: " + _relic_play_hint(id)
 		else:
-			label.text = _collection_status_line(false, false, false) + "  " + relic_engine.get_display_name(id) + "\n" + relic_engine.get_metadata_line(id) + "\nMarker: " + String(RELIC_UNLOCKS.get(id, "Locked"))
-			panel.tooltip_text = relic_engine.get_display_name(id) + "\n" + relic_engine.get_metadata_line(id) + "\nMarker: " + String(RELIC_UNLOCKS.get(id, "Locked")) + "\nPlaybook: " + _relic_play_hint(id)
+			label.text = _collection_status_line(false, false, false) + "  " + relic_engine.get_display_name(id) + "\n" + relic_engine.get_metadata_line(id) + "\nUnlock: " + String(RELIC_UNLOCKS.get(id, "Locked"))
+			panel.tooltip_text = relic_engine.get_display_name(id) + "\n" + relic_engine.get_metadata_line(id) + "\nUnlock: " + String(RELIC_UNLOCKS.get(id, "Locked")) + "\nPlaybook: " + _relic_play_hint(id)
 		margin.add_child(label)
 		menu_relic_list.add_child(panel)
 
@@ -1821,8 +2508,9 @@ func _collection_status_line(unlocked: bool, selected: bool, freshly_unlocked: b
 
 func _menu_house_case_text() -> String:
 	var lines: Array[String] = []
-	lines.append("Seed " + str(next_run_seed) + " | Stake $" + str(STARTING_CASH) + " | Best " + str(best_run_score) + " | Completed " + str(runs_completed))
+	lines.append("Seed " + str(next_run_seed) + " | Stake $" + str(STARTING_CASH) + " | Best " + str(best_run_score) + " | Chips " + str(_meta_unspent_chips()) + "/" + str(meta_chips_total))
 	lines.append("Equipped: " + _cue_name(selected_cue_id) + " / " + _board_name(selected_board_id) + " | " + _menu_collection_progress_text())
+	lines.append("Training: " + _meta_effect_summary())
 	if _has_new_case_unlocks():
 		lines.append(_new_case_unlock_text(3))
 	return "\n".join(lines)
@@ -2040,7 +2728,7 @@ func _load_progress() -> void:
 	var data: Dictionary = parsed
 	unlocked_cue_ids = _string_array_to_string_names(data.get("unlocked_cues", ["house_cue"]), CUE_DEFS, &"house_cue")
 	unlocked_board_ids = _string_array_to_string_names(data.get("unlocked_boards", ["casino_green"]), BOARD_DEFS, &"casino_green")
-	unlocked_relic_ids = _string_array_to_relic_ids(data.get("unlocked_relics", ["bankers_ring", "rail_tax", "center_cut"]))
+	unlocked_relic_ids = _string_array_to_relic_ids(data.get("unlocked_relics", ["money_ball", "sniper", "entropy_scanner", "center_cut"]))
 	selected_cue_id = StringName(data.get("selected_cue", "house_cue"))
 	selected_board_id = StringName(data.get("selected_board", "casino_green"))
 	if not unlocked_cue_ids.has(selected_cue_id):
@@ -2055,6 +2743,12 @@ func _load_progress() -> void:
 	last_run_seed = int(data.get("last_run_seed", 0))
 	furthest_table_reached = clampi(int(data.get("furthest_table_reached", 0)), 0, maxi(0, tables.size() - 1))
 	selected_practice_table = clampi(int(data.get("selected_practice_table", 0)), 0, furthest_table_reached)
+	meta_chips_total = maxi(0, int(data.get("meta_chips_total", 0)))
+	var loaded_meta = data.get("meta_upgrade_levels", {})
+	if typeof(loaded_meta) == TYPE_DICTIONARY:
+		for id in META_UPGRADES.keys():
+			meta_upgrade_levels[String(id)] = clampi(int(loaded_meta.get(String(id), 0)), 0, int(META_UPGRADES[id].get("max", 0)))
+	_clamp_meta_allocation_to_budget()
 	chalk_inventory = data.get("chalk_inventory", {})
 	audio_muted = bool(data.get("audio_muted", false))
 	audio_volume = clampf(float(data.get("audio_volume", 0.8)), 0.25, 1.0)
@@ -2075,6 +2769,8 @@ func _save_progress() -> void:
 		"last_run_seed": last_run_seed,
 		"furthest_table_reached": furthest_table_reached,
 		"selected_practice_table": selected_practice_table,
+		"meta_chips_total": meta_chips_total,
+		"meta_upgrade_levels": meta_upgrade_levels,
 		"chalk_inventory": chalk_inventory,
 		"audio_muted": audio_muted,
 		"audio_volume": audio_volume,
@@ -2107,7 +2803,7 @@ func _open_beta_case() -> void:
 func _reset_progress() -> void:
 	unlocked_cue_ids = [&"house_cue"]
 	unlocked_board_ids = [&"casino_green"]
-	unlocked_relic_ids = [&"bankers_ring", &"rail_tax", &"center_cut"]
+	unlocked_relic_ids = [&"money_ball", &"sniper", &"entropy_scanner", &"center_cut"]
 	selected_cue_id = &"house_cue"
 	selected_board_id = &"casino_green"
 	best_run_score = 0
@@ -2116,6 +2812,9 @@ func _reset_progress() -> void:
 	last_run_seed = 0
 	furthest_table_reached = 0
 	selected_practice_table = 0
+	meta_chips_total = 0
+	for id in META_UPGRADES.keys():
+		meta_upgrade_levels[String(id)] = 0
 	chalk_inventory.clear()
 	equipped_chalk_id = &""
 	audio_muted = false
@@ -2157,10 +2856,10 @@ func _pause_help_text() -> String:
 		table_text = _contract_route_name_text() + " table " + _contract_room_progress_text() + ": " + _table_tier_text(current_table) + " | " + String(current_table.get("name", "Table"))
 	var objective := _objective_progress_text() if not current_table.is_empty() else "Progress: -"
 	var mode_text := "Practice marker | " if practice_run else ""
-	return "Left mouse: hold and release to shoot | Right click: call a pocket | B: cycle side bet | Q/E and W/S: English | X: reset spin\n\n" + mode_text + seed_text + " | " + table_text + " | " + _audio_settings_text() + " | " + _juice_settings_text() + "\n" + objective + "\n" + _pause_build_text() + "\n\nPress D during play to print a compact debug report to the Godot output."
+	return "Left mouse: hold and release to shoot | Right click: call a pocket | Q/E and W/S: English | X: reset spin\n\n" + mode_text + seed_text + " | " + table_text + " | " + _audio_settings_text() + " | " + _juice_settings_text() + "\n" + objective + "\n" + _pause_build_text() + "\n\nPress D during play to print a compact debug report to the Godot output."
 
 func _pause_build_text() -> String:
-	return "Stake: " + str(run_score) + " score | " + _cash_status_text() + " | " + _style_status_text() + " | Rep " + str(run_health) + " | " + _run_pressure_text() + "\nCue: " + _cue_name(selected_cue_id) + " | " + _cue_trait_text(selected_cue_id) + "\nBoard: " + _board_name(selected_board_id) + " | " + _board_trait_text(selected_board_id) + "\n" + _run_upgrade_summary() + "\nRelics: " + _compact_relic_names(5)
+	return "Stake: " + str(run_score) + " score | " + _cash_status_text() + " | Balls " + str(run_health) + " | " + _run_pressure_text() + "\nCue: " + _cue_name(selected_cue_id) + " | " + _cue_trait_text(selected_cue_id) + "\nBoard: " + _board_name(selected_board_id) + " | " + _board_trait_text(selected_board_id) + "\n" + _run_upgrade_summary() + "\nRelics: " + _compact_relic_names(5)
 
 func _pause_beta_ledger_text() -> String:
 	var lines: Array[String] = []
@@ -2208,15 +2907,16 @@ func _tag_glossary_text() -> String:
 	lines.append("POT: any scoring ball drops. MULTI_POT: 2+ balls drop on one shot.")
 	lines.append("BANK: a scoring pot after rail contact. KICK: cue ball hit a rail before first object contact.")
 	lines.append("CAROM: cue ball contacts 2+ object balls. KISS: an object ball bumps another object before the pot.")
+	lines.append("RICOCHET_POT: a ball drops after another object ball set it up. CHAIN_POT: next-shot bonus after a scoring pot.")
 	lines.append("LONG_POT: long travel into a pocket. PERFECT_POT: center-cut pocket entry.")
 	lines.append("SOFT_TOUCH: low-power scoring shot. POWER_SHOT: high-power scoring shot.")
 	lines.append("CALLED_POCKET: right-clicked pocket was hit. CLUSTER_BREAK: 4+ balls moved.")
 	lines.append("SCRATCH: cue ball potted. BOSS_HIT: Black Eight took impact damage.")
-	lines.append("RUNOUT: table cleared with no miss markers and no scratches.")
+	lines.append("RUNOUT: table cleared with no true whiffs and no cue-ball pockets.")
 	return "\n".join(lines)
 
 func _compact_tag_glossary_line() -> String:
-	return "Tag book: BANK rails, KICK rail-first cue, CAROM 2+ cue contacts, KISS object-to-object, LONG distance, PERFECT center cut, SOFT low power, POWER high power, CALLED right-click pocket, CLUSTER 4+ moved, RUNOUT clean table."
+	return "Tag book: BANK rails, KICK rail-first cue, CAROM 2+ cue contacts, KISS object-to-object, RICOCHET indirect pot, CHAIN next-shot pot, LONG distance, PERFECT center cut, SOFT low power, POWER high power, CALLED right-click pocket, CLUSTER 4+ moved, RUNOUT clean table."
 
 func _active_build_playbook_text() -> String:
 	var hints: Array[String] = []
@@ -2345,7 +3045,7 @@ func _string_array_to_relic_ids(values) -> Array[StringName]:
 			var id := StringName(str(value))
 			if valid_ids.has(id) and not result.has(id):
 				result.append(id)
-	for starter_id in [&"bankers_ring", &"rail_tax", &"center_cut"]:
+	for starter_id in [&"money_ball", &"sniper", &"entropy_scanner", &"center_cut"]:
 		if not result.has(starter_id):
 			result.push_front(starter_id)
 	return result
@@ -2539,44 +3239,34 @@ func _board_pocket_throat_radius() -> float:
 
 func _relic_play_hint(id: StringName) -> String:
 	match id:
-		&"bankers_ring":
-			return "BANK pots."
-		&"rail_tax":
-			return "rail contact before a scoring pot."
+		&"money_ball":
+			return "gold-ball cash routes."
+		&"sniper":
+			return "precision lines on your first three shots."
+		&"entropy_scanner":
+			return "multi-contact ricochet planning."
 		&"center_cut":
 			return "PERFECT_POT entries."
-		&"cluster_breaker":
-			return "CLUSTER_BREAK rack movement."
-		&"thunder_break":
-			return "first-shot POWER_SHOT openings."
-		&"gold_leaf":
-			return "safe gold-ball cash routes."
-		&"witchwood_triangle":
-			return "controlled cursed-ball pots."
-		&"pocket_monopoly":
-			return "repeat use of one pocket."
-		&"dead_eye_lens":
-			return "CALLED_POCKET precision."
-		&"high_roller_chip":
-			return "clears with shots spare."
-		&"firecracker_ball":
-			return "first-pot explosion setups."
-		&"tip_jar":
-			return "Style tags before table clears."
-		&"white_gloves":
-			return "no-scratch clean clears."
-		&"velvet_rails":
-			return "multi-rail BANK and KICK lines."
-		&"no_loose_ends":
-			return "last-ball finisher pots."
-		&"side_bet_slip":
+		&"rail_coupon":
+			return "BANK and KICK pots."
+		&"combo_receipt":
+			return "MULTI_POT shots."
+		&"spare_ball":
+			return "clearing tables with balls left."
+		&"chalk_credit":
+			return "SOFT_TOUCH scoring shots."
+		&"long_glass":
+			return "LONG_POT routes."
+		&"hot_hand":
+			return "CHAIN_POT streaks."
+		&"split_lens":
+			return "RICOCHET_POT payouts."
+		&"called_tab":
 			return "CALLED_POCKET payouts."
-		&"chapel_candle":
-			return "CAROM and KISS pots."
-		&"rain_check":
-			return "LONG_POT, especially long banks."
-		&"mirror_hex":
-			return "risky scoring shots near scratch danger."
+		&"bumper_policy":
+			return "CLUSTER_BREAK rack movement."
+		&"quiet_hands":
+			return "gentle SOFT_TOUCH control."
 		_:
 			return ""
 
@@ -2650,7 +3340,7 @@ func _table_unlock_preview_short(table_id: StringName) -> String:
 
 func _practice_marker_text() -> String:
 	var table := _practice_table_def()
-	return "Practice Marker: " + str(selected_practice_table + 1) + "/" + str(tables.size()) + " " + _table_tier_text(table) + " | " + String(table.get("name", "Table")) + " | Reached " + str(furthest_table_reached + 1) + "/" + str(tables.size())
+	return "Practice Table: " + str(selected_practice_table + 1) + "/" + str(tables.size()) + " " + _table_tier_text(table) + " | " + String(table.get("name", "Table")) + " | Reached " + str(furthest_table_reached + 1) + "/" + str(tables.size())
 
 func _practice_table_def() -> Dictionary:
 	if tables.is_empty():
@@ -2842,7 +3532,7 @@ func _chalk_button(id: StringName) -> Button:
 func _chalk_play_hint(id: StringName) -> String:
 	match id:
 		&"blue_chalk":
-			return "called pockets, perfect pots, and long reads."
+			return "opening racks, called pockets, perfect pots, and long reads."
 		&"red_chalk":
 			return "break shots, clusters, bumpers, and sticky felt."
 		&"safe_chalk":
@@ -2900,6 +3590,15 @@ func _apply_run_contracts_to_current_table() -> void:
 				var boss_hp := int(current_table.get("boss_health", 0))
 				current_table["boss_health"] = maxi(120, int(round(float(boss_hp) * (1.0 - run_contract_score_ease))))
 		table_notes.append("Soft House Line: objective eased")
+
+func _apply_meta_table_refill() -> void:
+	var refill := _meta_extra_shot_bonus()
+	if refill <= 0:
+		return
+	var before := run_health
+	run_health = mini(_meta_max_balls(), run_health + refill)
+	if run_health > before and table_index > 0:
+		table_notes.append("Spare Shot: +" + str(run_health - before) + " ball")
 
 func _apply_cue_scoring_effects(summary) -> void:
 	match selected_cue_id:
@@ -3057,59 +3756,53 @@ func _table_unlock_defs(table_id: StringName) -> Array[Dictionary]:
 		&"corner_money":
 			return [
 				{"type": &"board", "id": &"velvet_blue"},
-				{"type": &"relic", "id": &"thunder_break"},
-				{"type": &"relic", "id": &"pocket_monopoly"}
+				{"type": &"relic", "id": &"rail_coupon"}
 			]
 		&"long_way":
 			return [
 				{"type": &"cue", "id": &"rail_baron"},
-				{"type": &"relic", "id": &"witchwood_triangle"},
-				{"type": &"relic", "id": &"high_roller_chip"}
+				{"type": &"relic", "id": &"spare_ball"}
 			]
 		&"bar_fight":
 			return [
 				{"type": &"cue", "id": &"breakers_maul"},
-				{"type": &"relic", "id": &"cluster_breaker"},
-				{"type": &"relic", "id": &"firecracker_ball"}
+				{"type": &"relic", "id": &"combo_receipt"},
+				{"type": &"relic", "id": &"bumper_policy"}
 			]
 		&"gold_rush":
 			return [
 				{"type": &"cue", "id": &"dead_eye_cue"},
 				{"type": &"board", "id": &"cashier_gold"},
-				{"type": &"relic", "id": &"gold_leaf"},
-				{"type": &"relic", "id": &"dead_eye_lens"}
+				{"type": &"relic", "id": &"chalk_credit"}
 			]
 		&"side_bet_alley":
 			return [
 				{"type": &"cue", "id": &"bookies_hook"},
 				{"type": &"board", "id": &"bookie_slate"},
-				{"type": &"relic", "id": &"side_bet_slip"}
+				{"type": &"relic", "id": &"called_tab"}
 			]
 		&"carom_chapel":
 			return [
 				{"type": &"cue", "id": &"chapel_bridge"},
-				{"type": &"relic", "id": &"chapel_candle"}
+				{"type": &"relic", "id": &"split_lens"}
 			]
 		&"bankers_wake":
 			return [
 				{"type": &"board", "id": &"rain_glass"},
-				{"type": &"relic", "id": &"rain_check"}
+				{"type": &"relic", "id": &"long_glass"}
 			]
 		&"scratch_parlor":
 			return [
-				{"type": &"relic", "id": &"mirror_hex"}
+				{"type": &"relic", "id": &"hot_hand"}
 			]
 		&"bad_felt":
 			return [
-				{"type": &"relic", "id": &"white_gloves"},
-				{"type": &"relic", "id": &"velvet_rails"},
-				{"type": &"relic", "id": &"no_loose_ends"}
+				{"type": &"relic", "id": &"quiet_hands"}
 			]
 		&"black_eight":
 			return [
 				{"type": &"cue", "id": &"eight_cane"},
-				{"type": &"board", "id": &"midnight_crypt"},
-				{"type": &"relic", "id": &"tip_jar"}
+				{"type": &"board", "id": &"midnight_crypt"}
 			]
 	return []
 
@@ -3367,7 +4060,7 @@ func _start_run(is_practice: bool = false, table_limit: int = 0) -> void:
 		next_run_seed = _new_run_seed()
 	_save_progress()
 	reward_rng.seed = run_seed + (selected_practice_table * 7919 if practice_run else 0)
-	run_health = 6
+	run_health = _meta_max_balls()
 	run_cash = STARTING_CASH
 	run_debt = 0
 	current_side_bet = &""
@@ -3382,7 +4075,7 @@ func _start_run(is_practice: bool = false, table_limit: int = 0) -> void:
 	run_contract_gold_skim = 0
 	run_curse_ward = 0
 	table_index = selected_practice_table if practice_run else 0
-	relic_ids = [&"bankers_ring", &"rail_tax"]
+	relic_ids = [&"money_ball"]
 	run_table_ledger.clear()
 	run_unlock_messages.clear()
 	run_new_cue_ids.clear()
@@ -3390,6 +4083,11 @@ func _start_run(is_practice: bool = false, table_limit: int = 0) -> void:
 	run_new_relic_ids.clear()
 	run_cue_work_ids.clear()
 	run_contract_ids.clear()
+	chain_heat_ready = false
+	active_shot_chain_heat = false
+	scoring_fire_ball_ids.clear()
+	fire_trail_points.clear()
+	_end_last_ball_drama(true)
 	_load_table(table_index)
 
 func _load_table(index: int) -> void:
@@ -3411,14 +4109,30 @@ func _load_table(index: int) -> void:
 	table_score = 0
 	table_buy_in = 0
 	table_pot = 0
+	table_challenge.clear()
+	table_challenge_offers.clear()
 	table_shots_used = 0
 	table_notes.clear()
 	pocket_use.clear()
+	ball_travel_distances.clear()
+	ball_travel_last_positions.clear()
+	ball_trail_histories.clear()
+	object_ricochet_contact_ids.clear()
+	cue_contact_ids.clear()
+	collision_cooldown.clear()
+	scoring_fire_ball_ids.clear()
+	fire_trail_points.clear()
+	score_trail_bursts.clear()
+	fire_trail_emit_accum = 0.0
+	_end_last_ball_drama(true)
+	chain_heat_ready = false
+	active_shot_chain_heat = false
 	called_pocket_id = &""
 	current_shot_called_pocket_id = &""
 	active_shot_side_bet = &""
 	shots_remaining = int(current_table.get("shot_limit", 6))
 	_apply_run_contracts_to_current_table()
+	_apply_meta_table_refill()
 	_open_table_wager()
 	shot_id = 0
 	boss_health = int(current_table.get("boss_health", 0))
@@ -3444,6 +4158,7 @@ func _load_table(index: int) -> void:
 	_spawn_balls()
 	_show_float("Table " + _contract_room_progress_text(), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, -34), Color(1.0, 0.9, 0.45), 30)
 	_show_table_intro()
+	_show_table_challenge_offer()
 	_update_hud()
 	queue_redraw()
 
@@ -3458,16 +4173,98 @@ func _show_table_intro() -> void:
 		shot_receipt_seconds = 0.0
 
 func _open_table_wager() -> void:
-	if practice_run:
-		table_buy_in = 0
-		table_pot = 0
+	table_buy_in = 0
+	table_pot = 0
+	print("Table ready: optional challenge available | ", _cash_status_text())
+
+func _show_table_challenge_offer() -> void:
+	if practice_run or browser_pocket_test_enabled or browser_aim_test_enabled or browser_run_test_enabled:
+		state = State.AIMING
 		return
+	state = State.REWARD_PENDING
+	reward_panel.visible = true
+	reward_choice_locked = false
+	reward_title.text = String(current_table.get("name", "Table")) + " - choose an optional wager"
+	reward_summary_scroll.visible = true
+	reward_summary_scroll.custom_minimum_size = Vector2(820, 78)
+	reward_summary_label.custom_minimum_size = Vector2(800, 0)
+	reward_summary_label.text = "Clear the table before your balls run out. Challenges cost cash now and pay when you clear."
+	continue_button.visible = false
+	table_challenge_offers = _roll_table_challenges()
+	var offers: Array[Dictionary] = [{"type": &"challenge", "id": &"", "name": "No Challenge", "text": "Play the table straight. No wager.", "cost": 0, "payout": 0}]
+	offers.append_array(table_challenge_offers)
+	for i in range(reward_buttons.size()):
+		if i >= offers.size():
+			reward_buttons[i].visible = false
+			continue
+		var offer: Dictionary = offers[i]
+		reward_buttons[i].visible = true
+		reward_buttons[i].custom_minimum_size = Vector2(820, 86)
+		_set_button_font_size(reward_buttons[i], 20)
+		reward_buttons[i].set_meta("reward", offer)
+		var cost := int(offer.get("cost", 0))
+		var payout := int(offer.get("payout", 0))
+		var money := "Free" if cost <= 0 else "$" + str(cost) + " -> $" + str(payout)
+		reward_buttons[i].text = String(offer.get("name", "Challenge")) + "    " + money + "\n" + String(offer.get("text", ""))
+		reward_buttons[i].tooltip_text = String(offer.get("text", ""))
+		_apply_reward_button_style(reward_buttons[i], {"type": &"cash"})
+
+func _roll_table_challenges() -> Array[Dictionary]:
 	var tier := _table_tier(current_table)
-	table_buy_in = 4 + tier * 3 + mini(table_index, 5) * 2
-	table_pot = table_buy_in * (3 + tier)
-	_apply_cash_delta(-table_buy_in)
-	table_notes.append("Buy-in $" + str(table_buy_in) + " opens a $" + str(table_pot) + " room pot")
-	print("Table wager: buy-in $", table_buy_in, " | pot $", table_pot, " | ", _cash_status_text())
+	var pool: Array[Dictionary] = [
+		{"type": &"challenge", "id": &"called", "name": "Call Your Shot", "text": "Clear after making a called-pocket pot.", "cost": 2 + tier, "payout": 7 + tier * 2},
+		{"type": &"challenge", "id": &"bank", "name": "Rail Ticket", "text": "Clear after a bank or kick pot.", "cost": 3 + tier, "payout": 10 + tier * 3},
+		{"type": &"challenge", "id": &"multi", "name": "Double Drop", "text": "Clear after a multi-pot shot.", "cost": 4 + tier, "payout": 13 + tier * 4},
+		{"type": &"challenge", "id": &"ricochet", "name": "Indirect Money", "text": "Clear after a ricochet pot.", "cost": 4 + tier, "payout": 15 + tier * 4},
+		{"type": &"challenge", "id": &"clean", "name": "Clean Sheet", "text": "Clear with no cue-ball pocket and no true whiff.", "cost": 3 + tier, "payout": 11 + tier * 3}
+	]
+	var offers: Array[Dictionary] = []
+	while offers.size() < 3 and not pool.is_empty():
+		var index := reward_rng.randi_range(0, pool.size() - 1)
+		offers.append(pool.pop_at(index))
+	return offers
+
+func _apply_table_challenge_choice(challenge: Dictionary) -> void:
+	table_challenge = challenge.duplicate(true)
+	var cost := int(table_challenge.get("cost", 0))
+	if cost > 0:
+		_apply_cash_delta(-cost)
+		table_notes.append("Challenge wager: -" + "$" + str(cost) + " on " + String(table_challenge.get("name", "Challenge")))
+	else:
+		table_challenge.clear()
+	reward_panel.visible = false
+	state = State.AIMING
+	_update_hud()
+	queue_redraw()
+
+func _update_table_challenge(summary: ShotSummary) -> void:
+	if table_challenge.is_empty():
+		return
+	if bool(table_challenge.get("hit", false)):
+		return
+	var id: StringName = table_challenge.get("id", &"")
+	var hit := false
+	match id:
+		&"called":
+			hit = summary.tags.has(&"CALLED_POCKET")
+		&"bank":
+			hit = summary.tags.has(&"BANK") or summary.tags.has(&"KICK")
+		&"multi":
+			hit = summary.tags.has(&"MULTI_POT")
+		&"ricochet":
+			hit = summary.tags.has(&"RICOCHET_POT")
+		&"clean":
+			hit = not summary.scratch and not summary.miss
+	if hit:
+		table_challenge["hit"] = true
+		_show_float("CHALLENGE LIVE", _shot_feedback_anchor(summary) + Vector2(0, -104), Color(1.0, 0.82, 0.28), 22)
+
+func _challenge_status_text() -> String:
+	if table_challenge.is_empty():
+		return "Challenge: none"
+	var name := String(table_challenge.get("name", "Challenge"))
+	var status := "done" if bool(table_challenge.get("hit", false)) else "open"
+	return name + " " + status + " ($" + str(int(table_challenge.get("payout", 0))) + ")"
 
 func _apply_cash_delta(amount: int) -> void:
 	if amount == 0:
@@ -3491,20 +4288,13 @@ func _cash_status_text() -> String:
 	return "$" + str(run_cash)
 
 func _cycle_side_bet() -> void:
-	var bets: Array[StringName] = [&"", &"called", &"bank", &"gold", &"multi"]
-	var index := bets.find(current_side_bet)
-	if index < 0:
-		current_side_bet = &"called"
-	else:
-		current_side_bet = bets[(index + 1) % bets.size()]
-	_show_float(_side_bet_status_text(), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, TABLE_RECT.size.y + RAIL_THICKNESS + 108.0), Color(1.0, 0.82, 0.36), 18)
+	current_side_bet = &""
+	_show_float("Challenge is chosen before the table", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, TABLE_RECT.size.y + RAIL_THICKNESS + 108.0), Color(1.0, 0.82, 0.36), 18)
 	_update_hud()
 	queue_redraw()
 
 func _side_bet_status_text() -> String:
-	if current_side_bet == &"":
-		return "Bet: none"
-	return "Bet " + _side_bet_name(current_side_bet) + " $" + str(_side_bet_cost(current_side_bet)) + " pays $" + str(_side_bet_payout(current_side_bet))
+	return _challenge_status_text()
 
 func _side_bet_name(id: StringName) -> String:
 	match id:
@@ -3559,11 +4349,11 @@ func _apply_side_bet(summary: ShotSummary) -> void:
 	if _side_bet_hit(summary, active_shot_side_bet):
 		summary.cash_delta += payout
 		summary.style_delta += 1
-		summary.breakdown.append("Side bet hit (" + name + "): +$" + str(payout) + ", +1 Style")
+		summary.breakdown.append("Table challenge hit (" + name + "): +$" + str(payout) + ", +1 Style")
 		_show_float("SIDE BET +$" + str(payout), _shot_feedback_anchor(summary) + Vector2(0, -88), Color(1.0, 0.82, 0.28), 24)
 	else:
 		summary.cash_delta -= cost
-		summary.breakdown.append("Side bet missed (" + name + "): -$" + str(cost))
+		summary.breakdown.append("Table challenge missed (" + name + "): -$" + str(cost))
 		_show_float("BET LOST -$" + str(cost), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, -76), Color(1.0, 0.34, 0.24), 22)
 
 func _consume_table_intro_input(event: InputEvent) -> bool:
@@ -3622,7 +4412,6 @@ func _build_rails() -> void:
 		body.collision_layer = 2
 		body.collision_mask = 1
 		rails.add_child(body)
-	_build_corner_jaws()
 	var corner_stop := RAIL_THICKNESS + TABLE_BACKSTOP_THICKNESS
 	var mouth_relief := BALL_RADIUS + 18.0
 	var corner_guard := maxf(12.0, corner_stop - mouth_relief)
@@ -3683,7 +4472,7 @@ func _build_corner_jaws() -> void:
 	var right := TABLE_RECT.end.x
 	var top := TABLE_RECT.position.y
 	var bottom := TABLE_RECT.end.y
-	var jaw_radius := 22.0
+	var jaw_radius := 16.0
 	var jaw_defs := [
 		{"id": &"NW_N", "pos": Vector2(left + POCKET_CORNER_GAP, top - RAIL_THICKNESS * 0.35)},
 		{"id": &"NW_W", "pos": Vector2(left - RAIL_THICKNESS * 0.35, top + POCKET_CORNER_GAP)},
@@ -3773,7 +4562,7 @@ func _spawn_balls() -> void:
 		ball_data["id"] = StringName(String(current_table["id"]) + "_" + str(n))
 		_spawn_ball(ball_data)
 
-	if relic_ids.has(&"gold_leaf") and current_table.get("objective", &"") != &"boss":
+	if relic_ids.has(&"money_ball") and current_table.get("objective", &"") != &"boss":
 		var leaf_pos := TABLE_RECT.position + Vector2(710 + reward_rng.randi_range(-70, 70), 120 + reward_rng.randi_range(-50, 50))
 		_spawn_ball({
 			"id": StringName(String(current_table["id"]) + "_leaf_gold"),
@@ -3784,9 +4573,9 @@ func _spawn_balls() -> void:
 			"color": Color(1.0, 0.76, 0.12),
 			"radius": BALL_RADIUS
 		})
-		table_notes.append("Gold Leaf seeded an extra gold ball")
+		table_notes.append("Money Ball seeded an extra gold ball")
 		_spawn_pulse(leaf_pos, Color(1.0, 0.78, 0.16), 18, 92)
-		_show_float("GOLD LEAF", leaf_pos + Vector2(0, -34), Color(1.0, 0.86, 0.24), 20)
+		_show_float("MONEY BALL", leaf_pos + Vector2(0, -34), Color(1.0, 0.86, 0.24), 20)
 
 func _spawn_ball(spec: Dictionary):
 	var kind: StringName = spec.get("kind", &"normal")
@@ -3901,11 +4690,11 @@ func _display_name_for_kind(kind: StringName) -> String:
 func _explanation_for_kind(kind: StringName) -> String:
 	match kind:
 		&"cue":
-			return "Your striker. Pocketing it is a scratch: -1 reputation and a score penalty."
+			return "Your striker. Pocketing it is a scratch. Lose 1 ball unless the shot potted 2+ balls."
 		&"gold":
 			return "Economy ball. Pot it for extra cash in addition to score."
 		&"cursed":
-			return "Danger ball. Potting it hurts reputation unless Witchwood Triangle is active."
+			return "Risk ball. It scores more, but cursed pockets can still reduce the payout."
 		&"bomb":
 			return "Volatile ball. Pot it or hit it hard to blast nearby balls outward."
 		&"boss":
@@ -4053,33 +4842,84 @@ func _process(delta: float) -> void:
 		elif charge_t <= 0.12:
 			charge_t = 0.12
 			charge_dir = 1.0
+	_update_last_ball_drama(delta)
 	if shake_amount > 0.0:
 		shake_amount = maxf(0.0, shake_amount - delta * 16.0)
 		var shake := shake_amount * _juice_shake_scale()
 		camera.offset = Vector2(fx_rng.randf_range(-shake, shake), fx_rng.randf_range(-shake, shake))
 	else:
 		camera.offset = Vector2.ZERO
+	_apply_camera_drama_transform(delta)
 	_update_rail_flash(delta)
+	_update_fire_trails(delta)
+	_update_score_trails(delta)
 	_update_hud()
 	_update_ball_tooltip()
 	_update_relic_tooltip()
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
+	_simulate_pocket_mouths(delta)
 	_capture_committed_pocket_entries(delta)
 	_handle_out_of_bounds_balls()
 	_apply_table_zone_effects(delta)
 	_limit_ball_speeds()
 	_update_browser_pocket_test(delta)
+	_update_browser_aim_test(delta)
 	if state != State.SHOT_IN_MOTION:
 		return
 	shot_seconds += delta
+	_update_ball_travel_tracking()
 	if _all_balls_settled() and shot_seconds > 0.45:
 		settle_frames += 1
 	else:
 		settle_frames = 0
 	if settle_frames >= SETTLE_FRAMES_NEEDED or shot_seconds >= MAX_SHOT_SECONDS:
 		_resolve_shot()
+
+func _simulate_pocket_mouths(delta: float) -> void:
+	if state != State.SHOT_IN_MOTION:
+		return
+	for ball in _active_balls():
+		if ball.potted:
+			continue
+		var pocket = _nearest_pocket(ball.global_position)
+		if pocket == null:
+			continue
+		var local := _pocket_local_position(ball.global_position, pocket)
+		var depth := float(local.get("depth", 9999.0))
+		var lateral := float(local.get("lateral", 9999.0))
+		var half_width := _pocket_mouth_half_width(pocket)
+		if depth > POCKET_MOUTH_DEPTH + BALL_RADIUS or depth < -POCKET_CUP_DEPTH * 2.2:
+			continue
+		if absf(lateral) > half_width + POCKET_LIP_SOFT_ZONE + BALL_RADIUS * 0.35:
+			continue
+		var inward := _pocket_inward_axis(pocket)
+		var tangent := _pocket_tangent_axis(pocket)
+		var velocity: Vector2 = ball.linear_velocity
+		var into_speed := -velocity.dot(inward)
+		var lateral_speed := velocity.dot(tangent)
+		var abs_lateral := absf(lateral)
+		var shelf_start := _pocket_fall_depth(pocket) + BALL_RADIUS * 1.15
+
+		if not _pocket_capture_is_blocked(ball, pocket) and _ball_has_entered_pocket_cup(ball, pocket, local):
+			on_pocket_entered(ball, pocket, true)
+			continue
+
+		if abs_lateral > half_width:
+			continue
+
+		if depth > shelf_start:
+			continue
+		if into_speed <= -35.0:
+			continue
+		var mouth_t: float = clampf(1.0 - depth / maxf(1.0, shelf_start), 0.0, 1.0)
+		var center_t: float = clampf(1.0 - abs_lateral / maxf(1.0, half_width), 0.0, 1.0)
+		var cup_pull: Vector2 = pocket.global_position - ball.global_position
+		var cup_dir: Vector2 = cup_pull.normalized() if cup_pull.length_squared() > 0.01 else -inward
+		var correction: Vector2 = -tangent * lateral_speed * (0.035 + 0.10 * mouth_t) * center_t
+		var pull: Vector2 = cup_dir * POCKET_FUNNEL_ACCEL * delta * mouth_t * center_t
+		ball.linear_velocity += correction + pull
 
 func _capture_committed_pocket_entries(delta: float) -> void:
 	if state != State.SHOT_IN_MOTION:
@@ -4127,19 +4967,19 @@ func _motion_crosses_pocket_mouth(ball, pocket, previous_pos: Vector2, current_p
 	var speed: float = ball.linear_velocity.length()
 	if motion.length_squared() <= 0.01 or speed <= 18.0:
 		return false
-	var pocket_pos: Vector2 = pocket.global_position
-	var capture_radius := _board_pocket_capture_radius() + BALL_RADIUS * 0.22
-	var throat_radius := _board_pocket_throat_radius() * (1.08 if _is_corner_pocket(pocket.pocket_id) else 1.02)
-	var closest_distance := _distance_point_to_segment(pocket_pos, previous_pos, current_pos)
-	var entry_dir := (pocket_pos - previous_pos).normalized()
-	if entry_dir.length() <= 0.01:
-		entry_dir = (pocket_pos - current_pos).normalized()
-	var toward_speed: float = ball.linear_velocity.dot(entry_dir)
-	if toward_speed < maxf(28.0, speed * 0.18):
+	var previous_local := _pocket_local_position(previous_pos, pocket)
+	var current_local := _pocket_local_position(current_pos, pocket)
+	var previous_depth := float(previous_local.get("depth", 9999.0))
+	var current_depth := float(current_local.get("depth", 9999.0))
+	var half_width := _pocket_fall_half_width(pocket, speed)
+	if minf(absf(float(previous_local.get("lateral", 9999.0))), absf(float(current_local.get("lateral", 9999.0)))) > half_width:
 		return false
-	if closest_distance <= capture_radius:
-		return true
-	if closest_distance > throat_radius:
+	var fall_depth := _pocket_fall_depth(pocket)
+	if previous_depth <= fall_depth and current_depth <= fall_depth:
+		return false
+	if current_depth > fall_depth:
+		return false
+	if previous_depth < -fall_depth:
 		return false
 	return _motion_has_clean_pocket_entry(ball, pocket, previous_pos, current_pos)
 
@@ -4158,9 +4998,112 @@ func _motion_has_clean_pocket_entry(ball, pocket, previous_pos: Vector2, current
 	return alignment >= 0.82 and lateral_error <= allowance
 
 func _pocket_mouth_half_width(pocket) -> float:
-	var base := BALL_RADIUS * (1.55 if _is_corner_pocket(pocket.pocket_id) else 1.34)
+	var base := BALL_RADIUS * (1.72 if _is_corner_pocket(pocket.pocket_id) else 1.50)
 	var board_scale := clampf(float(_board_def(selected_board_id).get("pocket_capture", 1.0)), 0.88, 1.06)
 	return base * board_scale
+
+func _pocket_fall_depth(pocket) -> float:
+	return POCKET_CUP_DEPTH if _is_corner_pocket(pocket.pocket_id) else POCKET_CUP_DEPTH + BALL_RADIUS * 0.32
+
+func _pocket_fall_half_width(pocket, speed: float) -> float:
+	var base := _pocket_mouth_half_width(pocket)
+	var speed_t := clampf((speed - 170.0) / 520.0, 0.0, 1.0)
+	var shelf_scale := lerpf(1.18, 0.76 if _is_corner_pocket(pocket.pocket_id) else 0.84, speed_t)
+	return base * shelf_scale
+
+func _is_slow_roll_inside_pocket_facing(ball, pocket, local: Dictionary = {}) -> bool:
+	if local.is_empty():
+		local = _pocket_local_position(ball.global_position, pocket)
+	var speed: float = ball.linear_velocity.length()
+	if speed > 150.0:
+		return false
+	var depth := float(local.get("depth", 9999.0))
+	if depth > POCKET_MOUTH_DEPTH * 0.82 or depth < -_pocket_fall_depth(pocket):
+		return false
+	var lateral := absf(float(local.get("lateral", 9999.0)))
+	if lateral > _pocket_fall_half_width(pocket, speed):
+		return false
+	var inward := _pocket_inward_axis(pocket)
+	var into_speed: float = -ball.linear_velocity.dot(inward)
+	return into_speed > -18.0 or depth <= POCKET_CUP_DEPTH + BALL_RADIUS * 0.35
+
+func _pocket_inward_axis(pocket) -> Vector2:
+	match pocket.pocket_id:
+		&"N":
+			return Vector2.DOWN
+		&"S":
+			return Vector2.UP
+		&"NW", &"NE", &"SW", &"SE":
+			var center := TABLE_RECT.position + TABLE_RECT.size * 0.5
+			var axis: Vector2 = (center - pocket.global_position).normalized()
+			if axis.length() > 0.01:
+				return axis
+	return (TABLE_RECT.position + TABLE_RECT.size * 0.5 - pocket.global_position).normalized()
+
+func _pocket_tangent_axis(pocket) -> Vector2:
+	var inward := _pocket_inward_axis(pocket)
+	return Vector2(-inward.y, inward.x).normalized()
+
+func _pocket_local_position(point: Vector2, pocket) -> Dictionary:
+	var rel: Vector2 = point - pocket.global_position
+	var inward: Vector2 = _pocket_inward_axis(pocket)
+	var tangent: Vector2 = _pocket_tangent_axis(pocket)
+	return {
+		"depth": rel.dot(inward),
+		"lateral": rel.dot(tangent)
+	}
+
+func _ball_has_entered_pocket_cup(ball, pocket, local: Dictionary = {}) -> bool:
+	if local.is_empty():
+		local = _pocket_local_position(ball.global_position, pocket)
+	if _is_slow_roll_inside_pocket_facing(ball, pocket, local):
+		return true
+	var depth := float(local.get("depth", 9999.0))
+	var lateral := absf(float(local.get("lateral", 9999.0)))
+	var speed: float = ball.linear_velocity.length()
+	var half_width := _pocket_fall_half_width(pocket, speed)
+	if depth > _pocket_fall_depth(pocket):
+		return false
+	if lateral > half_width:
+		return false
+	if ball.global_position.distance_to(pocket.global_position) > _board_pocket_capture_radius() + BALL_RADIUS * 0.30:
+		return false
+	var inward: Vector2 = _pocket_inward_axis(pocket)
+	var into_speed: float = -ball.linear_velocity.dot(inward)
+	return into_speed > -42.0 or depth <= 2.0
+
+func _ball_is_in_pocket_drop_chute(ball, pocket, local: Dictionary = {}) -> bool:
+	if local.is_empty():
+		local = _pocket_local_position(ball.global_position, pocket)
+	var speed: float = ball.linear_velocity.length()
+	var depth := float(local.get("depth", 9999.0))
+	if depth > _pocket_fall_depth(pocket) + BALL_RADIUS * 0.35:
+		return false
+	if depth < -POCKET_MOUTH_DEPTH:
+		return false
+	var lateral := absf(float(local.get("lateral", 9999.0)))
+	if lateral > _pocket_fall_half_width(pocket, speed) + BALL_RADIUS * 0.22:
+		return false
+	if ball.global_position.distance_to(pocket.global_position) > _board_pocket_throat_radius() + BALL_RADIUS * 0.85:
+		return false
+	var inward := _pocket_inward_axis(pocket)
+	var into_speed: float = -ball.linear_velocity.dot(inward)
+	return into_speed > -48.0 or depth <= 0.0
+
+func _is_clear_pocket_mouth_entry(ball, pocket) -> bool:
+	var local := _pocket_local_position(ball.global_position, pocket)
+	var depth := float(local.get("depth", 9999.0))
+	if depth > POCKET_MOUTH_DEPTH + BALL_RADIUS * 0.75 or depth < -POCKET_MOUTH_DEPTH:
+		return false
+	var speed: float = ball.linear_velocity.length()
+	var lateral := absf(float(local.get("lateral", 9999.0)))
+	if lateral > _pocket_fall_half_width(pocket, speed) + BALL_RADIUS * 0.32:
+		return false
+	var inward := _pocket_inward_axis(pocket)
+	var into_speed: float = -ball.linear_velocity.dot(inward)
+	if into_speed < maxf(18.0, speed * 0.10) and depth > _pocket_fall_depth(pocket) + BALL_RADIUS * 0.65:
+		return false
+	return true
 
 func _pocket_lateral_error(ball, pocket) -> float:
 	var velocity: Vector2 = ball.linear_velocity
@@ -4169,6 +5112,21 @@ func _pocket_lateral_error(ball, pocket) -> float:
 	var to_pocket: Vector2 = pocket.global_position - ball.global_position
 	var velocity_dir := velocity.normalized()
 	return absf(velocity_dir.cross(to_pocket))
+
+func _pocket_reject_key(ball, pocket) -> String:
+	return str(ball.get_instance_id()) + ":" + String(pocket.pocket_id)
+
+func _pocket_capture_is_blocked(ball, pocket) -> bool:
+	var key := _pocket_reject_key(ball, pocket)
+	if not pocket_reject_cooldown.has(key):
+		return false
+	if Engine.get_physics_frames() <= int(pocket_reject_cooldown[key]):
+		return true
+	pocket_reject_cooldown.erase(key)
+	return false
+
+func _block_pocket_recapture(ball, pocket, frames: int = 240) -> void:
+	pocket_reject_cooldown[_pocket_reject_key(ball, pocket)] = Engine.get_physics_frames() + frames
 
 func _distance_point_to_segment(point: Vector2, a: Vector2, b: Vector2) -> float:
 	var ab := b - a
@@ -4179,19 +5137,7 @@ func _distance_point_to_segment(point: Vector2, a: Vector2, b: Vector2) -> float
 	return point.distance_to(a + ab * t)
 
 func _is_committed_to_pocket(ball, pocket) -> bool:
-	var to_pocket: Vector2 = pocket.global_position - ball.global_position
-	var distance := to_pocket.length()
-	if distance <= _board_pocket_capture_radius():
-		return _can_capture_pocket(ball, pocket, false)
-	if distance > _board_pocket_throat_radius() * 1.18:
-		return false
-	if not _is_clean_pocket_entry(ball, pocket):
-		return false
-	var speed: float = ball.linear_velocity.length()
-	if speed <= 26.0:
-		return true
-	var toward_speed: float = ball.linear_velocity.dot(to_pocket.normalized())
-	return toward_speed >= maxf(30.0, speed * 0.28)
+	return _ball_has_entered_pocket_cup(ball, pocket)
 
 func _flash_rail(rail_id: StringName, speed: float) -> void:
 	if rail_id == &"rail":
@@ -4212,6 +5158,175 @@ func _update_rail_flash(delta: float) -> void:
 	for id in expired:
 		rail_flash.erase(id)
 
+func _ignite_ball(ball, seconds: float) -> void:
+	if ball == null or not is_instance_valid(ball) or ball.potted:
+		return
+	var until_frame := Engine.get_physics_frames() + maxi(1, int(round(seconds * 60.0)))
+	scoring_fire_ball_ids[ball.ball_id] = maxi(int(scoring_fire_ball_ids.get(ball.ball_id, 0)), until_frame)
+
+func _update_fire_trails(delta: float) -> void:
+	if not fire_trail_points.is_empty():
+		for i in range(fire_trail_points.size() - 1, -1, -1):
+			var point := fire_trail_points[i]
+			point["ttl"] = float(point.get("ttl", 0.0)) - delta
+			if float(point.get("ttl", 0.0)) <= 0.0:
+				fire_trail_points.remove_at(i)
+			else:
+				fire_trail_points[i] = point
+	var frame := Engine.get_physics_frames()
+	for id in scoring_fire_ball_ids.keys():
+		if frame > int(scoring_fire_ball_ids[id]):
+			scoring_fire_ball_ids.erase(id)
+	if scoring_fire_ball_ids.is_empty():
+		return
+	fire_trail_emit_accum += delta
+	if fire_trail_emit_accum < 0.035:
+		return
+	fire_trail_emit_accum = 0.0
+	for ball in _active_balls():
+		if not scoring_fire_ball_ids.has(ball.ball_id):
+			continue
+		var speed: float = ball.linear_velocity.length()
+		if state != State.SHOT_IN_MOTION or speed < 7.0:
+			continue
+		var back_dir: Vector2 = -ball.linear_velocity.normalized()
+		var jitter := Vector2(fx_rng.randf_range(-3.0, 3.0), fx_rng.randf_range(-3.0, 3.0))
+		fire_trail_points.append({
+			"pos": ball.global_position + back_dir * float(ball.radius) * 0.65 + jitter,
+			"ttl": 0.42,
+			"life": 0.42,
+			"radius": float(ball.radius) * fx_rng.randf_range(0.34, 0.58)
+		})
+	if fire_trail_points.size() > 90:
+		fire_trail_points = fire_trail_points.slice(fire_trail_points.size() - 90)
+
+func _update_ball_travel_tracking() -> void:
+	for ball in _active_balls():
+		if ball.potted:
+			continue
+		_record_ball_travel_position(ball)
+
+func _record_ball_travel_position(ball) -> void:
+	if ball == null or not is_instance_valid(ball):
+		return
+	var id: StringName = ball.ball_id
+	var current_pos: Vector2 = ball.global_position
+	var previous_pos: Vector2 = ball_travel_last_positions.get(id, current_pos)
+	var segment := previous_pos.distance_to(current_pos)
+	if segment > 0.25:
+		ball_travel_distances[id] = float(ball_travel_distances.get(id, 0.0)) + segment
+		ball_travel_last_positions[id] = current_pos
+		var history: Array = ball_trail_histories.get(id, [])
+		if history.is_empty() or (history[history.size() - 1] as Vector2).distance_to(current_pos) >= 20.0:
+			history.append(current_pos)
+			if history.size() > 34:
+				history = history.slice(history.size() - 34)
+			ball_trail_histories[id] = history
+	else:
+		ball_travel_last_positions[id] = current_pos
+
+func _spawn_score_trail(ball_id: StringName, end_pos: Vector2, value: int, color: Color, negative: bool = false, intensity: float = 1.0) -> void:
+	var history: Array = ball_trail_histories.get(ball_id, [])
+	if history.is_empty():
+		return
+	var points: Array[Vector2] = []
+	for raw_point in history:
+		points.append(raw_point)
+	if points[points.size() - 1].distance_to(end_pos) > 2.0:
+		points.append(end_pos)
+	if points.size() < 2:
+		return
+	score_trail_bursts.append({
+		"points": points,
+		"value": value,
+		"color": color,
+		"negative": negative,
+		"intensity": maxf(0.35, intensity),
+		"ttl": (1.35 if not negative else 1.05) * clampf(intensity, 0.85, 1.65),
+		"life": (1.35 if not negative else 1.05) * clampf(intensity, 0.85, 1.65)
+	})
+	if score_trail_bursts.size() > 12:
+		score_trail_bursts = score_trail_bursts.slice(score_trail_bursts.size() - 12)
+
+func _spawn_miss_score_trails(summary: ShotSummary) -> void:
+	if summary.has_successful_pot():
+		return
+	var candidates: Array[Dictionary] = []
+	for id in ball_travel_distances.keys():
+		var dist := float(ball_travel_distances.get(id, 0.0))
+		if dist < 80.0:
+			continue
+		candidates.append({"id": id, "dist": dist})
+	candidates.sort_custom(func(a, b): return float(a.get("dist", 0.0)) > float(b.get("dist", 0.0)))
+	var count := mini(2, candidates.size())
+	for i in range(count):
+		var id: StringName = candidates[i].get("id", &"")
+		var history: Array = ball_trail_histories.get(id, [])
+		if history.size() < 2:
+			continue
+		_spawn_score_trail(id, history[history.size() - 1], 0, Color(1.0, 0.18, 0.16), true)
+
+func _update_score_trails(delta: float) -> void:
+	if score_trail_bursts.is_empty():
+		return
+	for i in range(score_trail_bursts.size() - 1, -1, -1):
+		var burst := score_trail_bursts[i]
+		burst["ttl"] = float(burst.get("ttl", 0.0)) - delta
+		if float(burst.get("ttl", 0.0)) <= 0.0:
+			score_trail_bursts.remove_at(i)
+		else:
+			score_trail_bursts[i] = burst
+
+func _draw_score_trails() -> void:
+	if score_trail_bursts.is_empty():
+		return
+	var font := ThemeDB.fallback_font
+	for burst in score_trail_bursts:
+		var points: Array = burst.get("points", [])
+		if points.size() < 2:
+			continue
+		var ttl := float(burst.get("ttl", 0.0))
+		var life := maxf(0.01, float(burst.get("life", 1.0)))
+		var t := clampf(ttl / life, 0.0, 1.0)
+		var color: Color = burst.get("color", Color(0.72, 1.0, 0.66))
+		var negative := bool(burst.get("negative", false))
+		var value := int(burst.get("value", 0))
+		var intensity := maxf(0.35, float(burst.get("intensity", 1.0)))
+		var segments := points.size() - 1
+		for i in range(segments):
+			var a: Vector2 = points[i]
+			var b: Vector2 = points[i + 1]
+			var progress := float(i + 1) / float(maxi(1, segments))
+			var alpha := (0.10 + progress * 0.55) * t * clampf(intensity, 0.8, 1.65)
+			var width := lerpf(2.0, 7.0 + intensity * 2.0, progress) * (0.45 + 0.55 * t)
+			draw_line(a, b, Color(color.r, color.g, color.b, alpha), width)
+			if not negative and value > 0 and i % 2 == 0:
+				var tick_value := maxi(1, int(round(float(value) * progress)))
+				var tick_pos := a.lerp(b, 0.62)
+				var tick_alpha := alpha * 1.25
+				draw_string(font, tick_pos + Vector2(7.0, -7.0 - progress * 10.0), "+" + str(tick_value), HORIZONTAL_ALIGNMENT_LEFT, 88.0, int(12 + progress * 8 + intensity * 2.0), Color(color.r, color.g, color.b, tick_alpha))
+		var end_pos: Vector2 = points[points.size() - 1]
+		if negative:
+			draw_circle(end_pos, 18.0 + (1.0 - t) * 16.0, Color(1.0, 0.08, 0.06, 0.12 * t))
+			draw_string(font, end_pos + Vector2(-34.0, -30.0), "NO PAY", HORIZONTAL_ALIGNMENT_CENTER, 90.0, 17, Color(1.0, 0.20, 0.16, 0.88 * t))
+		elif value > 0:
+			draw_circle(end_pos, 20.0 + (1.0 - t) * 22.0, Color(color.r, color.g, color.b, 0.16 * t))
+			draw_arc(end_pos, 26.0 + (1.0 - t) * 18.0, 0.0, TAU, 48, Color(color.r, color.g, color.b, 0.72 * t), 3.0)
+			draw_string(font, end_pos + Vector2(-48.0, -46.0), "TRAVEL +" + str(value), HORIZONTAL_ALIGNMENT_CENTER, 116.0, 18, Color(color.r, color.g, color.b, 0.95 * t))
+
+func _draw_fire_trails() -> void:
+	if fire_trail_points.is_empty():
+		return
+	for point in fire_trail_points:
+		var ttl := float(point.get("ttl", 0.0))
+		var life := maxf(0.01, float(point.get("life", 0.42)))
+		var t := clampf(ttl / life, 0.0, 1.0)
+		var pos: Vector2 = point.get("pos", Vector2.ZERO)
+		var radius := float(point.get("radius", 8.0))
+		draw_circle(pos, radius * (1.0 + (1.0 - t) * 1.65), Color(1.0, 0.18, 0.03, 0.12 * t))
+		draw_circle(pos + Vector2(0.0, -radius * 0.24), radius * 0.68, Color(1.0, 0.48, 0.08, 0.22 * t))
+		draw_circle(pos + Vector2(0.0, -radius * 0.48), radius * 0.32, Color(1.0, 0.88, 0.22, 0.26 * t))
+
 func _handle_out_of_bounds_balls() -> void:
 	if not _should_contain_balls():
 		return
@@ -4230,8 +5345,6 @@ func _handle_out_of_bounds_balls() -> void:
 		var pocket = _nearest_pocket(ball.global_position)
 		if state == State.SHOT_IN_MOTION and pocket != null and _can_capture_pocket(ball, pocket, true):
 			on_pocket_entered(ball, pocket, true)
-		elif state == State.SHOT_IN_MOTION and pocket != null and _is_ball_in_pocket_throat(ball, pocket):
-			_rattle_ball_from_pocket(ball, pocket)
 		elif not soft_bounds.has_point(ball.global_position) or not hard_bounds.has_point(ball.global_position):
 			_return_ball_to_table(ball)
 		else:
@@ -4282,10 +5395,13 @@ func _fire_shot() -> void:
 		table_intro_panel.visible = false
 	table_intro_seconds = 0.0
 	var aim_dir := _aim_direction()
-	var side_dir := Vector2(-aim_dir.y, aim_dir.x)
+	_rescue_cue_ball_from_pocket_mouth(aim_dir)
+	aim_dir = _aim_direction()
 	active_shot_chalk_id = _consume_equipped_chalk()
 	active_shot_chalk_used = false
 	active_shot_velvet_rails_used = false
+	active_shot_chain_heat = chain_heat_ready
+	chain_heat_ready = false
 	current_shot_spin = cue_spin
 	current_shot_aim_dir = aim_dir
 	cue_spin_contact_applied = false
@@ -4293,7 +5409,7 @@ func _fire_shot() -> void:
 	active_shot_side_bet = current_side_bet
 	var power_curve := pow(charge_t, 1.45)
 	var min_power := MIN_POWER * float(_cue_def(selected_cue_id).get("min_power", 1.0)) * maxf(0.74, 1.0 - run_cue_spin_bonus * 0.18)
-	var max_power := MAX_POWER * float(_cue_def(selected_cue_id).get("max_power", 1.0)) * (1.0 + run_cue_power_bonus)
+	var max_power := MAX_POWER * float(_cue_def(selected_cue_id).get("max_power", 1.0)) * (1.0 + run_cue_power_bonus + _meta_power_bonus())
 	if selected_cue_id == &"breakers_maul" and table_shots_used == 0:
 		max_power *= 1.2
 	if active_shot_chalk_id == &"red_chalk":
@@ -4305,7 +5421,9 @@ func _fire_shot() -> void:
 	potted_records.clear()
 	moved_start_positions.clear()
 	pocket_trace_positions.clear()
+	pocket_reject_cooldown.clear()
 	cue_contact_ids.clear()
+	object_ricochet_contact_ids.clear()
 	collision_cooldown.clear()
 	settle_frames = 0
 	shot_seconds = 0.0
@@ -4314,6 +5432,7 @@ func _fire_shot() -> void:
 		"power": power,
 		"power_normalized": power_curve,
 		"chalk_id": active_shot_chalk_id,
+		"chain_heat": active_shot_chain_heat,
 		"spin_x": current_shot_spin.x,
 		"spin_y": current_shot_spin.y,
 		"called_pocket_id": current_shot_called_pocket_id,
@@ -4323,12 +5442,8 @@ func _fire_shot() -> void:
 		moved_start_positions[ball.ball_id] = ball.global_position
 		pocket_trace_positions[ball.ball_id] = ball.global_position
 
-	var launch_impulse := aim_dir * power
 	var spin_power := 1.0 + run_cue_spin_bonus
-	if absf(current_shot_spin.x) > 0.01:
-		launch_impulse += side_dir * power * current_shot_spin.x * 0.055 * spin_power
-	if absf(current_shot_spin.y) > 0.01:
-		launch_impulse += aim_dir * power * current_shot_spin.y * 0.035 * spin_power
+	var launch_impulse := _shot_launch_impulse(aim_dir, power, current_shot_spin)
 	cue_ball.angular_velocity = -current_shot_spin.x * 18.0 * spin_power
 	cue_ball.apply_central_impulse(launch_impulse)
 	current_log.add_event(GameplayEvent.new(GameplayEvent.Type.CUE_IMPULSE_APPLIED, shot_id, {
@@ -4338,11 +5453,22 @@ func _fire_shot() -> void:
 	}, cue_ball.global_position))
 	_spawn_pulse(cue_ball.global_position, Color(0.7, 1.0, 1.0), 20, 90)
 	_show_float("CRACK", cue_ball.global_position + Vector2(0, -34), Color(0.65, 1.0, 1.0), 22)
+	if active_shot_chain_heat:
+		_ignite_ball(cue_ball, 1.05)
+		_spawn_pulse(cue_ball.global_position, Color(1.0, 0.38, 0.10), 24, 124)
+		_show_float("CHAIN HEAT", cue_ball.global_position + Vector2(0, -62), Color(1.0, 0.66, 0.24), 21)
 	_play_audio_cue(&"shot", charge_t)
 	if current_shot_spin.length() > 0.01:
 		_show_float(_spin_label_text(), cue_ball.global_position + Vector2(0, -58), Color(0.72, 1.0, 0.95), 18)
 	shake_amount = maxf(shake_amount, charge_t * 5.0)
 	state = State.SHOT_IN_MOTION
+
+func _shot_launch_impulse(aim_dir: Vector2, power: float, spin: Vector2) -> Vector2:
+	var launch_impulse := aim_dir.normalized() * power
+	var spin_power := 1.0 + run_cue_spin_bonus
+	if absf(spin.y) > 0.01:
+		launch_impulse += aim_dir.normalized() * power * spin.y * 0.035 * spin_power
+	return launch_impulse
 
 func on_ball_body_contact(ball, body: Node, speed: float) -> void:
 	if state != State.SHOT_IN_MOTION or ball.potted:
@@ -4370,6 +5496,15 @@ func on_ball_body_contact(ball, body: Node, speed: float) -> void:
 		elif other.kind == &"cue" and ball.kind != &"cue":
 			cue_contact_ids[ball.ball_id] = true
 			_apply_cue_spin_after_object_contact(other, speed)
+		elif ball.kind != &"cue" and other.kind != &"cue":
+			object_ricochet_contact_ids[ball.ball_id] = true
+			object_ricochet_contact_ids[other.ball_id] = true
+			if not cue_contact_ids.has(ball.ball_id):
+				_ignite_ball(ball, 1.25)
+			if not cue_contact_ids.has(other.ball_id):
+				_ignite_ball(other, 1.25)
+			if speed > 120.0:
+				_show_float("RICOCHET", (ball.global_position + other.global_position) * 0.5 + Vector2(0, -30), Color(1.0, 0.55, 0.14), 17)
 		if speed > 420.0:
 			_spawn_pulse((ball.global_position + other.global_position) * 0.5, Color(1.0, 0.32, 0.12), 14, 72)
 		_play_audio_cue(&"ball_hit", clampf(speed / 700.0, 0.15, 1.0))
@@ -4382,7 +5517,7 @@ func on_ball_body_contact(ball, body: Node, speed: float) -> void:
 	elif body.is_in_group("rail"):
 		var rail_id: StringName = body.get_meta("rail_id", &"rail")
 		var pocket = _nearest_pocket(ball.global_position)
-		if pocket != null and String(rail_id).contains("_") and (_is_committed_to_pocket(ball, pocket) or _motion_crosses_pocket_mouth(ball, pocket, pocket_trace_positions.get(ball.ball_id, ball.global_position), ball.global_position)):
+		if pocket != null and (_is_clear_pocket_mouth_entry(ball, pocket) or _is_committed_to_pocket(ball, pocket) or _motion_crosses_pocket_mouth(ball, pocket, pocket_trace_positions.get(ball.ball_id, ball.global_position), ball.global_position)):
 			on_pocket_entered(ball, pocket, true)
 			return
 		current_log.add_event(GameplayEvent.new(GameplayEvent.Type.RAIL_HIT, shot_id, {
@@ -4396,13 +5531,6 @@ func on_ball_body_contact(ball, body: Node, speed: float) -> void:
 		if speed > 180.0:
 			_spawn_pulse(ball.global_position, current_table.get("accent", Color.CYAN), 8, 40)
 			_play_audio_cue(&"rail_hit", clampf(speed / 680.0, 0.12, 1.0))
-		if relic_ids.has(&"velvet_rails") and speed > 120.0:
-			ball.linear_velocity *= 1.06
-			ball.angular_velocity *= 1.04
-			if not active_shot_velvet_rails_used:
-				active_shot_velvet_rails_used = true
-				_spawn_pulse(ball.global_position, Color(0.62, 0.46, 1.0), 11, 62)
-				_show_float("VELVET RAILS", ball.global_position + Vector2(0, -42), Color(0.78, 0.62, 1.0), 17)
 		if active_shot_chalk_id == &"rail_chalk" and not active_shot_chalk_used and speed > 120.0:
 			active_shot_chalk_used = true
 			ball.linear_velocity *= 1.18
@@ -4458,8 +5586,6 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 		return
 	var center_error: float = ball.global_position.distance_to(pocket.global_position)
 	if not _can_capture_pocket(ball, pocket, forced):
-		if center_error <= _board_pocket_throat_radius():
-			_rattle_ball_from_pocket(ball, pocket)
 		return
 	current_log.add_event(GameplayEvent.new(GameplayEvent.Type.POCKET_ENTERED, shot_id, {
 		"ball_id": ball.ball_id,
@@ -4470,6 +5596,7 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 	pocket.pop()
 
 	if ball.kind == &"cue":
+		_record_ball_travel_position(ball)
 		current_log.add_event(GameplayEvent.new(GameplayEvent.Type.SCRATCH, shot_id, {
 			"pocket_id": pocket.pocket_id
 		}, pocket.global_position))
@@ -4484,7 +5611,6 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 		_show_float("SHIELDED", pocket.global_position + Vector2(0, -20), Color(0.95, 0.14, 1.0), 22)
 		var reject_dir := _pocket_rejection_direction(ball, pocket)
 		ball.apply_central_impulse(reject_dir * 680.0)
-		run_health = max(0, run_health - 1)
 		return
 
 	if ball.kind == &"boss" and bool(current_table.get("boss_requires_called_pocket", false)):
@@ -4497,16 +5623,24 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 			_rattle_ball_from_pocket(ball, pocket)
 			return
 
+	_record_ball_travel_position(ball)
+	var travel_distance := 0.0
+	if ball_travel_distances.has(ball.ball_id):
+		travel_distance = float(ball_travel_distances.get(ball.ball_id, 0.0))
+	elif moved_start_positions.has(ball.ball_id):
+		var start_pos: Vector2 = moved_start_positions[ball.ball_id]
+		travel_distance = start_pos.distance_to(ball.global_position)
+	var travel_score := scorer.travel_score_for_distance(travel_distance)
+	var was_final_required_ball := _is_final_required_ball(ball)
 	ball.pot()
 	pocket_trace_positions.erase(ball.ball_id)
 	potted_count_this_table += 1
 	if ball.kind == &"gold":
 		gold_potted_this_table += 1
 	pocket_use[pocket.pocket_id] = int(pocket_use.get(pocket.pocket_id, 0)) + 1
-	var travel_distance := 0.0
-	if moved_start_positions.has(ball.ball_id):
-		var start_pos: Vector2 = moved_start_positions[ball.ball_id]
-		travel_distance = start_pos.distance_to(ball.global_position)
+	var ricochet_pot: bool = object_ricochet_contact_ids.has(ball.ball_id) and not cue_contact_ids.has(ball.ball_id)
+	var chain_pot: bool = active_shot_chain_heat and ball.kind != &"cue"
+	var same_shot_chain_index := potted_records.size() + 1
 	potted_records.append({
 		"id": ball.ball_id,
 		"kind": ball.kind,
@@ -4515,7 +5649,10 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 		"pocket_id": pocket.pocket_id,
 		"perfect": center_error <= pocket.radius * 0.36,
 		"called": current_shot_called_pocket_id != &"" and pocket.pocket_id == current_shot_called_pocket_id,
-		"travel": travel_distance
+		"travel": travel_distance,
+		"travel_score": travel_score,
+		"ricochet": ricochet_pot,
+		"chain": chain_pot
 	})
 	current_log.add_event(GameplayEvent.new(GameplayEvent.Type.BALL_POTTED, shot_id, {
 		"ball_id": ball.ball_id,
@@ -4525,11 +5662,28 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 		"pocket_id": pocket.pocket_id,
 		"perfect": center_error <= pocket.radius * 0.36,
 		"called": current_shot_called_pocket_id != &"" and pocket.pocket_id == current_shot_called_pocket_id,
-		"travel": travel_distance
+		"travel": travel_distance,
+		"travel_score": travel_score,
+		"ricochet": ricochet_pot,
+		"chain": chain_pot
 	}, pocket.global_position))
 	_show_float(_pot_text(ball), pocket.global_position + Vector2(0, -28), _color_for_kind(ball.kind), 23)
+	if travel_score > 0:
+		var trail_intensity := 1.0 + float(maxi(0, same_shot_chain_index - 1)) * 0.22
+		_spawn_score_trail(ball.ball_id, pocket.global_position, travel_score, _color_for_kind(ball.kind).lerp(Color(0.75, 1.0, 0.58), 0.48), false, trail_intensity)
+		_show_float("TRAVEL +" + str(travel_score), pocket.global_position + Vector2(0, -104), Color(0.74, 1.0, 0.58), 19 + maxi(0, same_shot_chain_index - 1))
+	if ricochet_pot:
+		_show_float("RICOCHET +260", pocket.global_position + Vector2(0, -82), Color(1.0, 0.48, 0.10), 22)
+		_spawn_pulse(pocket.global_position, Color(1.0, 0.36, 0.08), 28, 154)
+		_play_audio_cue(&"reward", 0.7)
+	elif chain_pot:
+		_show_float("CHAIN +110", pocket.global_position + Vector2(0, -78), Color(1.0, 0.66, 0.24), 20)
+		_spawn_pulse(pocket.global_position, Color(1.0, 0.62, 0.18), 22, 118)
 	if current_shot_called_pocket_id != &"" and pocket.pocket_id == current_shot_called_pocket_id:
 		_show_float("CALLED", pocket.global_position + Vector2(0, -56), Color(1.0, 0.86, 0.36), 19)
+	_show_same_shot_chain_feedback(pocket.global_position, same_shot_chain_index)
+	if was_final_required_ball:
+		_complete_last_ball_drama(pocket.global_position)
 	_spawn_pulse(pocket.global_position, _color_for_kind(ball.kind), 16, 100)
 	_play_audio_cue(&"gold" if ball.kind == &"gold" else &"pocket")
 	shake_amount = maxf(shake_amount, 3.8)
@@ -4549,9 +5703,6 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 		_explode_at(pocket.global_position, 330.0, 560.0, Color(1.0, 0.38, 0.16))
 	if ball.kind == &"boss":
 		boss_potted = true
-	if relic_ids.has(&"firecracker_ball") and not firecracker_used:
-		firecracker_used = true
-		_explode_at(pocket.global_position, 420.0, 760.0, Color(1.0, 0.42, 0.12))
 
 func _rattle_ball_from_pocket(ball, pocket) -> void:
 	var reject_dir := _pocket_rejection_direction(ball, pocket)
@@ -4636,40 +5787,52 @@ func _is_near_corner_pocket_zone(pos: Vector2, id: StringName) -> bool:
 	return false
 
 func _is_ball_in_pocket_throat(ball, pocket) -> bool:
-	var to_pocket: Vector2 = pocket.global_position - ball.global_position
-	var distance: float = to_pocket.length()
-	if distance > _board_pocket_throat_radius():
+	var local := _pocket_local_position(ball.global_position, pocket)
+	var depth := float(local.get("depth", 9999.0))
+	var lateral := absf(float(local.get("lateral", 9999.0)))
+	if depth > POCKET_MOUTH_DEPTH or depth < -POCKET_CUP_DEPTH * 2.0:
+		return false
+	var shelf_start := _pocket_fall_depth(pocket) + BALL_RADIUS * 1.35
+	if depth > shelf_start:
 		return false
 	if _can_capture_pocket(ball, pocket, true):
 		return true
-	if _is_clean_pocket_entry(ball, pocket):
+	if lateral <= _pocket_mouth_half_width(pocket):
 		return false
 	var speed: float = ball.linear_velocity.length()
 	if speed <= 18.0:
 		return false
-	var toward_speed: float = ball.linear_velocity.dot(to_pocket.normalized())
-	return toward_speed > maxf(28.0, speed * 0.34)
+	var inward: Vector2 = _pocket_inward_axis(pocket)
+	var tangent := _pocket_tangent_axis(pocket)
+	var lateral_speed: float = ball.linear_velocity.dot(tangent)
+	if float(local.get("lateral", 0.0)) * lateral_speed < -8.0 and depth > POCKET_CUP_DEPTH:
+		return false
+	var into_speed: float = -ball.linear_velocity.dot(inward)
+	return into_speed > maxf(28.0, speed * 0.28)
 
 func _can_capture_pocket(ball, pocket, forced: bool = false) -> bool:
-	var to_pocket: Vector2 = pocket.global_position - ball.global_position
-	var center_error: float = to_pocket.length()
-	var capture_radius := _board_pocket_capture_radius()
-	if center_error > capture_radius:
-		var clean_limit := _board_pocket_throat_radius() * (1.12 if forced else 0.78)
-		if center_error <= clean_limit and _is_clean_pocket_entry(ball, pocket):
-			return true
+	if _pocket_capture_is_blocked(ball, pocket):
 		return false
-	if forced:
+	var local := _pocket_local_position(ball.global_position, pocket)
+	if _ball_has_entered_pocket_cup(ball, pocket, local):
 		return true
+	if not forced:
+		return false
+	if _ball_is_in_pocket_drop_chute(ball, pocket, local):
+		return true
+	var depth := float(local.get("depth", 9999.0))
+	var lateral := absf(float(local.get("lateral", 9999.0)))
+	if depth > _pocket_fall_depth(pocket) + BALL_RADIUS * 0.18:
+		return false
+	if lateral > _pocket_fall_half_width(pocket, ball.linear_velocity.length()):
+		return false
+	if ball.global_position.distance_to(pocket.global_position) > _board_pocket_capture_radius() + BALL_RADIUS * 0.15:
+		return false
 	var speed: float = ball.linear_velocity.length()
-	if speed <= 80.0 or to_pocket.length() <= 0.01:
+	if speed <= 34.0:
 		return true
-	var toward_speed: float = ball.linear_velocity.dot(to_pocket.normalized())
-	if toward_speed < maxf(22.0, speed * 0.18):
-		return false
-	if _is_clean_pocket_entry(ball, pocket):
-		return true
-	return true
+	var inward := _pocket_inward_axis(pocket)
+	return -ball.linear_velocity.dot(inward) > -28.0
 
 func _is_clean_pocket_entry(ball, pocket) -> bool:
 	var to_pocket: Vector2 = pocket.global_position - ball.global_position
@@ -4696,6 +5859,8 @@ func _is_clean_pocket_entry(ball, pocket) -> bool:
 	return alignment >= alignment_floor
 
 func _return_ball_to_table(ball) -> void:
+	if browser_pocket_test_active:
+		browser_pocket_test_returns += 1
 	var clamped_pos := _clamp_ball_inside_table(ball.global_position, BALL_RADIUS + 8.0)
 	var pocket = _nearest_pocket(ball.global_position)
 	if pocket != null and _is_corner_pocket(pocket.pocket_id) and _is_near_corner_pocket_zone(ball.global_position, pocket.pocket_id):
@@ -4773,6 +5938,7 @@ func _explode_at(origin: Vector2, radius: float, impulse: float, color: Color) -
 			ball.apply_central_impulse(to_ball.normalized() * impulse * (1.0 - d / radius))
 
 func _resolve_shot() -> void:
+	_end_last_ball_drama(true)
 	state = State.SHOT_RESOLVING
 	_apply_chaos_bleed()
 	_stop_stray_motion()
@@ -4782,12 +5948,11 @@ func _resolve_shot() -> void:
 	}))
 
 	var summary = _build_summary()
-	scorer.score(summary, current_table, potted_records, relic_ids.has(&"witchwood_triangle"))
+	scorer.score(summary, current_table, potted_records, false)
 	_apply_cue_scoring_effects(summary)
 	_apply_board_scoring_effects(summary)
 	_apply_chalk_scoring_effects(summary)
 	_apply_run_upgrade_scoring_effects(summary)
-	_apply_curse_ward_effects(summary)
 	relic_engine.apply_on_shot_resolve(summary, relic_ids, {
 		"table_shot_number": table_shots_used,
 		"pocket_use": pocket_use,
@@ -4799,11 +5964,11 @@ func _resolve_shot() -> void:
 	if _is_table_miss(summary):
 		summary.miss = true
 		table_misses += 1
-		summary.breakdown.append("Miss marker: no pot or boss damage")
-	if active_shot_velvet_rails_used:
-		summary.breakdown.append("Velvet Rails preserved rail speed")
-	_apply_rival_intent(summary)
-	_apply_side_bet(summary)
+		summary.breakdown.append("True whiff")
+	if not summary.has_successful_pot():
+		_spawn_miss_score_trails(summary)
+	_update_table_challenge(summary)
+	_apply_ball_loss_rule(summary)
 	last_summary = summary
 	_record_table_tags(summary)
 
@@ -4811,7 +5976,7 @@ func _resolve_shot() -> void:
 	run_score += summary.final_score
 	_apply_cash_delta(summary.cash_delta)
 	run_style += summary.style_delta
-	run_health = clampi(run_health + summary.health_delta, 0, 9)
+	run_health = clampi(run_health + summary.health_delta, 0, 99)
 	_show_shot_receipt(summary)
 	_show_shot_tag_feedback(summary)
 	if summary.final_score > 0:
@@ -4826,6 +5991,11 @@ func _resolve_shot() -> void:
 	if not completed_current_table and not failed_current_table:
 		_apply_post_shot_table_rules()
 		_check_table_end()
+	if not completed_current_table and not failed_current_table and summary.has_successful_pot() and summary.final_score > 0:
+		chain_heat_ready = true
+		if cue_ball != null and not cue_ball.potted:
+			_spawn_pulse(cue_ball.global_position, Color(1.0, 0.54, 0.16), 18, 100)
+			_show_float("NEXT SHOT HOT", cue_ball.global_position + Vector2(0, -52), Color(1.0, 0.66, 0.24), 19)
 	_update_hud()
 
 	if completed_current_table:
@@ -4844,9 +6014,29 @@ func _apply_chaos_bleed() -> void:
 func _is_table_miss(summary: ShotSummary) -> bool:
 	if summary == null:
 		return false
-	if summary.has_successful_pot() or summary.boss_damage > 0:
+	if summary.has_successful_pot() or summary.scratch or summary.boss_damage > 0:
 		return false
-	return true
+	return summary.cue_object_contacts <= 0
+
+func _apply_ball_loss_rule(summary: ShotSummary) -> void:
+	if summary == null:
+		return
+	var loss := 0
+	var reason := ""
+	if summary.scratch:
+		if summary.potted_ball_ids.size() <= 1:
+			loss = 1
+			reason = "Cue ball pocketed"
+		else:
+			summary.breakdown.append("Multi-pot saved the scratch")
+	elif summary.miss:
+		loss = 1
+		reason = "True whiff"
+	if loss <= 0:
+		return
+	summary.health_delta -= loss
+	summary.breakdown.append(reason + ": -" + str(loss) + " ball")
+	_show_float("-" + str(loss) + " BALL", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 92), Color(1.0, 0.30, 0.22), 25)
 
 func _apply_post_shot_table_rules() -> void:
 	if current_table.get("objective", &"") != &"gold_rush":
@@ -4942,7 +6132,7 @@ func _apply_rival_intent(summary: ShotSummary) -> void:
 			var cash_bonus := 2 + _table_tier(current_table)
 			summary.cash_delta += cash_bonus
 			summary.style_delta += 1
-			summary.breakdown.append("Side bet broken: +$" + str(cash_bonus) + ", +1 Style")
+			summary.breakdown.append("Table challenge broken: +$" + str(cash_bonus) + ", +1 Style")
 			rival_composure = 2 + _table_tier(current_table)
 		_advance_rival_intent(1)
 		return
@@ -4952,7 +6142,7 @@ func _apply_rival_intent(summary: ShotSummary) -> void:
 		if rival_pressure >= 2:
 			summary.health_delta -= 1
 			rival_pressure = 0
-			summary.breakdown.append(rival_name + " calls your marker: -1 Rep")
+			summary.breakdown.append(rival_name + " calls your marker: -1 Ball")
 			_show_float("RIVAL MARKER", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 118), Color(1.0, 0.28, 0.28), 22)
 		_advance_rival_intent(2)
 
@@ -5042,6 +6232,10 @@ func _build_summary():
 				summary.longest_pot_distance = maxf(summary.longest_pot_distance, float(event.data.get("travel", 0.0)))
 				if object_kiss_ids.has(potted_id):
 					summary.kiss_pots += 1
+				if bool(event.data.get("ricochet", false)):
+					summary.ricochet_pot_count += 1
+				if bool(event.data.get("chain", false)):
+					summary.chain_pot_count += 1
 				if bool(event.data.get("perfect", false)):
 					summary.perfect_pots += 1
 				if bool(event.data.get("called", false)):
@@ -5052,7 +6246,10 @@ func _build_summary():
 				summary.boss_damage += int(event.data.get("damage", 0))
 	summary.cue_object_contacts = cue_contact_ids.size()
 	for ball in _all_balls():
-		if moved_start_positions.has(ball.ball_id):
+		if ball_travel_distances.has(ball.ball_id):
+			if float(ball_travel_distances.get(ball.ball_id, 0.0)) > 34.0:
+				summary.moved_ball_count += 1
+		elif moved_start_positions.has(ball.ball_id):
 			var start: Vector2 = moved_start_positions[ball.ball_id]
 			if start.distance_to(ball.global_position) > 34.0:
 				summary.moved_ball_count += 1
@@ -5077,7 +6274,7 @@ func _show_shot_receipt(summary: ShotSummary) -> void:
 	if summary.style_delta != 0:
 		deltas.append(("+" if summary.style_delta > 0 else "") + str(summary.style_delta) + " Style")
 	if summary.health_delta != 0:
-		deltas.append(("+" if summary.health_delta > 0 else "") + str(summary.health_delta) + " Rep")
+		deltas.append(("+" if summary.health_delta > 0 else "") + str(summary.health_delta) + " Ball")
 	var detail := "House stays quiet."
 	if not summary.breakdown.is_empty():
 		detail = _summary_breakdown_text(summary, 3)
@@ -5096,9 +6293,9 @@ func _shot_grade_text(summary: ShotSummary) -> String:
 	if summary.tags.has(&"RUNOUT"):
 		return "Runout Clear"
 	if summary.scratch and not summary.has_successful_pot():
-		return "Foul Marker"
+		return "Cue Foul"
 	if summary.miss:
-		return "Miss Marker"
+		return "True Whiff"
 	if summary.final_score >= 800 or summary.potted_ball_ids.size() >= 3:
 		return "House Roars"
 	if summary.final_score >= 420 or summary.tags.has(&"MULTI_POT"):
@@ -5121,7 +6318,7 @@ func _show_shot_tag_feedback(summary: ShotSummary) -> void:
 	var anchor := _shot_feedback_anchor(summary)
 	_show_float(callout, anchor + Vector2(0, -54), color, 28)
 	_spawn_pulse(anchor, color, 26, 128)
-	if summary.tags.has(&"MULTI_POT") or summary.tags.has(&"PERFECT_POT") or summary.tags.has(&"CALLED_POCKET") or summary.boss_damage > 0:
+	if summary.tags.has(&"RICOCHET_POT") or summary.tags.has(&"CHAIN_POT") or summary.tags.has(&"MULTI_POT") or summary.tags.has(&"PERFECT_POT") or summary.tags.has(&"CALLED_POCKET") or summary.boss_damage > 0:
 		_play_audio_cue(&"reward", 0.38)
 
 func _shot_feedback_anchor(summary: ShotSummary) -> Vector2:
@@ -5159,10 +6356,10 @@ func _clamp_feedback_position(pos: Vector2) -> Vector2:
 
 func _shot_tag_callout_text(summary: ShotSummary) -> String:
 	if summary.miss:
-		return "MISS MARKER"
+		return "TRUE WHIFF"
 	if summary.scratch:
 		return "SCRATCH"
-	var priority: Array[StringName] = [&"MULTI_POT", &"BANK", &"KICK", &"CAROM", &"KISS", &"LONG_POT", &"PERFECT_POT", &"CALLED_POCKET", &"SOFT_TOUCH", &"POWER_SHOT", &"CLUSTER_BREAK", &"BOSS_HIT"]
+	var priority: Array[StringName] = [&"RICOCHET_POT", &"CHAIN_POT", &"MULTI_POT", &"BANK", &"KICK", &"CAROM", &"KISS", &"LONG_POT", &"PERFECT_POT", &"CALLED_POCKET", &"SOFT_TOUCH", &"POWER_SHOT", &"CLUSTER_BREAK", &"BOSS_HIT"]
 	var picked: Array[String] = []
 	for tag in priority:
 		if summary.tags.has(tag):
@@ -5187,6 +6384,10 @@ func _tag_display_text(tag: StringName) -> String:
 			return "Carom"
 		&"KISS":
 			return "Kiss"
+		&"RICOCHET_POT":
+			return "Ricochet Pot"
+		&"CHAIN_POT":
+			return "Chain Heat"
 		&"LONG_POT":
 			return "Long Pot"
 		&"PERFECT_POT":
@@ -5209,6 +6410,10 @@ func _tag_display_text(tag: StringName) -> String:
 func _shot_tag_callout_color(summary: ShotSummary) -> Color:
 	if summary.miss or summary.scratch:
 		return Color(1.0, 0.30, 0.22)
+	if summary.tags.has(&"RICOCHET_POT"):
+		return Color(1.0, 0.45, 0.10)
+	if summary.tags.has(&"CHAIN_POT"):
+		return Color(1.0, 0.66, 0.24)
 	if summary.tags.has(&"PERFECT_POT") or summary.tags.has(&"CALLED_POCKET"):
 		return Color(1.0, 0.86, 0.34)
 	if summary.tags.has(&"BANK") or summary.tags.has(&"KICK"):
@@ -5230,23 +6435,39 @@ func _show_runout_feedback(score_bonus: int) -> void:
 	_spawn_pulse(center, color, 34, 170)
 	_play_audio_cue(&"clear", 0.9)
 
+func _show_same_shot_chain_feedback(pos: Vector2, chain_index: int) -> void:
+	if chain_index <= 1:
+		return
+	var tier := mini(chain_index, 6)
+	var color := Color(1.0, 0.50, 0.12).lerp(Color(1.0, 0.92, 0.24), clampf(float(tier - 2) / 4.0, 0.0, 1.0))
+	var label := "DOUBLE DROP"
+	match chain_index:
+		2:
+			label = "DOUBLE DROP"
+		3:
+			label = "TRIPLE DROP"
+		4:
+			label = "FOUR BALL RUN"
+		_:
+			label = "RUN x" + str(chain_index)
+	var lift := 132.0 + float(tier - 2) * 14.0
+	_show_float(label, pos + Vector2(0, -lift), color, 24 + tier * 2)
+	_show_float("x" + str(chain_index), pos + Vector2(40, -52), color, 24 + tier * 3)
+	_spawn_pulse(pos, color, 28.0 + float(tier) * 6.0, 150.0 + float(tier) * 28.0)
+	_spawn_pulse(pos, Color(1.0, 0.22, 0.08), 18.0 + float(tier) * 4.0, 92.0 + float(tier) * 18.0)
+	_play_audio_cue(&"reward", clampf(0.42 + float(tier) * 0.13, 0.0, 1.0))
+	if chain_index >= 3:
+		var center := TABLE_RECT.position + TABLE_RECT.size * 0.5
+		_show_float("HOT STREAK", center + Vector2(0, -TABLE_RECT.size.y * 0.34), Color(1.0, 0.82, 0.28), 24 + tier)
+		_spawn_pulse(center, Color(1.0, 0.76, 0.22), 18.0 + float(tier) * 4.0, 104.0 + float(tier) * 14.0)
+	shake_amount = maxf(shake_amount, minf(11.0, 4.0 + float(tier) * 1.35))
+
 func _check_table_end() -> void:
 	var objective: StringName = current_table.get("objective", &"score_target")
-	match objective:
-		&"score_target":
-			completed_current_table = table_score >= int(current_table.get("target_score", 1000))
-		&"pot_count":
-			completed_current_table = potted_count_this_table >= int(current_table.get("required_pots", 5))
-		&"clear_rack":
-			completed_current_table = _remaining_required_balls() == 0
-		&"gold_rush":
-			completed_current_table = gold_potted_this_table >= int(current_table.get("target_gold", 3))
-		&"tag_trial":
-			completed_current_table = _required_tags_remaining().is_empty()
-		&"boss":
-			completed_current_table = boss_potted
-	if not completed_current_table and shots_remaining <= 0:
-		failed_current_table = true
+	if objective == &"boss":
+		completed_current_table = boss_potted
+	else:
+		completed_current_table = _remaining_required_balls() == 0
 	if run_health <= 0:
 		failed_current_table = true
 
@@ -5284,16 +6505,18 @@ func _complete_table(summary: ShotSummary) -> void:
 	var unlock_start := run_unlock_messages.size()
 	if not practice_run:
 		_grant_table_unlocks(StringName(current_table.get("id", &"")))
+		_award_meta_chips(META_CLEAR_CHIPS, "Table clear")
 	var table_unlocks := run_unlock_messages.slice(unlock_start, run_unlock_messages.size())
-	var complete_bonus := relic_engine.apply_on_table_complete(summary, relic_ids, shots_remaining, run_style)
+	var complete_bonus := relic_engine.apply_on_table_complete(summary, relic_ids, run_health, run_style)
 	var bonus_score := int(complete_bonus.get("score", 0))
 	var bonus_cash := int(complete_bonus.get("cash", 0))
 	var bonus_style := int(complete_bonus.get("style", 0))
+	var bonus_balls := int(complete_bonus.get("health", 0))
 	var notes: Array = complete_bonus.get("notes", [])
 	if table_misses == 0 and table_scratches == 0:
 		if not summary.tags.has(&"RUNOUT"):
 			summary.tags.append(&"RUNOUT")
-		var runout_score := 300 + shots_remaining * 40
+		var runout_score := 300 + run_health * 40
 		bonus_score += runout_score
 		bonus_cash += 2
 		bonus_style += 1
@@ -5303,10 +6526,19 @@ func _complete_table(summary: ShotSummary) -> void:
 		bonus_cash += table_pot
 		table_notes.append("Room pot paid: +$" + str(table_pot))
 		table_pot = 0
+	if not table_challenge.is_empty():
+		if bool(table_challenge.get("hit", false)):
+			var payout := int(table_challenge.get("payout", 0))
+			bonus_cash += payout
+			table_notes.append("Challenge paid: +$" + str(payout))
+			_show_float("CHALLENGE +$" + str(payout), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 124), Color(1.0, 0.82, 0.28), 27)
+		else:
+			table_notes.append("Challenge missed")
 	run_score += bonus_score
 	table_score += bonus_score
 	_apply_cash_delta(bonus_cash)
 	run_style += bonus_style
+	run_health = clampi(run_health + bonus_balls, 0, 99)
 	for note in notes:
 		table_notes.append(String(note))
 	if bonus_score > 0 or bonus_cash > 0 or bonus_style > 0:
@@ -5321,22 +6553,6 @@ func _complete_table(summary: ShotSummary) -> void:
 
 func _fail_table() -> void:
 	current_log.add_event(GameplayEvent.new(GameplayEvent.Type.TABLE_FAILED, shot_id, {"table": current_table.get("id", &"")}))
-	if table_buy_in > 0:
-		var marker := maxi(2, int(ceil(float(table_buy_in) * 0.5)))
-		_apply_cash_delta(-marker)
-		table_notes.append("House marker: -$" + str(marker))
-		_show_float("MARKER -$" + str(marker), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, -74), Color(1.0, 0.30, 0.22), 24)
-	run_health = max(0, run_health - 1)
-	if run_debt >= DEBT_REP_STEP:
-		run_health = max(0, run_health - 1)
-		table_notes.append("Debt collector: -1 Rep")
-	var fail_relics := relic_engine.apply_on_table_fail(relic_ids)
-	var health_delta := int(fail_relics.get("health", 0))
-	if health_delta != 0:
-		run_health = clampi(run_health + health_delta, 0, 9)
-	var fail_notes: Array = fail_relics.get("notes", [])
-	for note in fail_notes:
-		table_notes.append(String(note))
 	_record_table_ledger(false)
 	_play_audio_cue(&"fail")
 	state = State.REWARD_PENDING
@@ -5359,13 +6575,11 @@ func _record_table_ledger(cleared: bool) -> void:
 
 func _table_fail_summary() -> String:
 	var lines: Array[String] = []
-	lines.append("The felt takes 1 reputation. Failed tables add a marker and pay no room pot.")
+	lines.append("No balls left. The run closes here.")
 	lines.append("Table dossier: " + _table_dossier_text())
-	if relic_ids.has(&"high_roller_chip"):
-		lines.append("High Roller Chip adds a second reputation loss on failed tables.")
 	lines.append(_objective_failure_line())
 	lines.append(_objective_progress_text())
-	lines.append("Table score " + str(table_score) + " | Shots used " + str(table_shots_used) + " | " + _clean_table_status_text() + " | Rep " + str(run_health) + " | " + _cash_status_text())
+	lines.append("Table score " + str(table_score) + " | Shots used " + str(table_shots_used) + " | " + _clean_table_status_text() + " | Balls " + str(run_health) + " | " + _cash_status_text())
 	if last_summary != null and not last_summary.breakdown.is_empty():
 		lines.append("Last shot: " + _last_breakdown_text(3))
 	if last_summary != null and not last_summary.tags.is_empty():
@@ -5373,14 +6587,16 @@ func _table_fail_summary() -> String:
 	if not table_notes.is_empty():
 		lines.append("House notes: " + table_notes[-1])
 	lines.append("")
-	lines.append("Next table starts with your current relics and reputation.")
+	lines.append("Avoid cue-ball pockets and true whiffs to keep balls in stock.")
 	return "\n".join(lines)
 
 func _objective_failure_line() -> String:
 	var objective: StringName = current_table.get("objective", &"score_target")
+	if objective != &"boss":
+		return "Objective missed: no balls left with " + str(_remaining_required_balls()) + " balls still on the table."
 	match objective:
 		&"score_target":
-			return "Objective missed: " + str(table_score) + "/" + str(int(current_table.get("target_score", 1000))) + " score before shots ran out."
+			return "Objective missed: balls still on the table."
 		&"pot_count":
 			return "Objective missed: " + str(potted_count_this_table) + "/" + str(int(current_table.get("required_pots", 5))) + " balls potted."
 		&"clear_rack":
@@ -5398,6 +6614,8 @@ func _objective_progress_text() -> String:
 	if current_table.is_empty():
 		return "Progress: -"
 	var objective: StringName = current_table.get("objective", &"score_target")
+	if objective != &"boss":
+		return "Progress: clear " + str(_remaining_required_balls()) + " balls"
 	match objective:
 		&"score_target":
 			return "Progress: " + str(table_score) + "/" + str(int(current_table.get("target_score", 1000))) + " score"
@@ -5430,35 +6648,21 @@ func _next_shot_read_text(summary: ShotSummary = null) -> String:
 		return "Next read: table closed; use Replay Seed or Practice to reproduce the miss."
 	var objective: StringName = current_table.get("objective", &"score_target")
 	var read := ""
-	match objective:
-		&"score_target":
-			var remaining_score := maxi(0, int(current_table.get("target_score", 1000)) - table_score)
-			read = "need " + str(remaining_score) + " score"
-		&"pot_count":
-			var remaining_pots := maxi(0, int(current_table.get("required_pots", 5)) - potted_count_this_table)
-			read = "need " + str(remaining_pots) + " more pot"
-			if remaining_pots != 1:
-				read += "s"
-		&"clear_rack":
-			read = "clear " + str(_remaining_required_balls()) + " remaining ball"
-			if _remaining_required_balls() != 1:
-				read += "s"
-		&"gold_rush":
-			var remaining_gold := maxi(0, int(current_table.get("target_gold", 3)) - gold_potted_this_table)
-			read = "cash " + str(remaining_gold) + " more gold | " + _gold_rush_timer_text()
-		&"tag_trial":
-			read = "earn " + _tag_list_text(_required_tags_remaining())
-		&"boss":
-			if _boss_shield_remaining() > 0:
-				read = "pot marked shield balls x" + str(_boss_shield_remaining())
-			elif boss_health > 0:
-				read = "bruise the Eight for " + str(boss_health) + " HP"
-			elif bool(current_table.get("boss_requires_called_pocket", false)) and called_pocket_id == &"":
-				read = "right-click a pocket, then pot the Eight"
-			else:
-				read = "pot the vulnerable Eight"
-		_:
-			read = _table_play_hint(current_table)
+	if objective != &"boss":
+		read = "clear " + str(_remaining_required_balls()) + " remaining ball"
+		if _remaining_required_balls() != 1:
+			read += "s"
+	else:
+		match objective:
+			&"boss":
+				if _boss_shield_remaining() > 0:
+					read = "pot marked shield balls x" + str(_boss_shield_remaining())
+				elif boss_health > 0:
+					read = "bruise the Eight for " + str(boss_health) + " HP"
+				elif bool(current_table.get("boss_requires_called_pocket", false)) and called_pocket_id == &"":
+					read = "right-click a pocket, then pot the Eight"
+				else:
+					read = "pot the vulnerable Eight"
 	var build_hint := _next_build_hint_text(summary)
 	if build_hint != "":
 		read += " | " + build_hint
@@ -5499,8 +6703,7 @@ func _show_reward_draft(won: bool, table_unlocks: Array = []) -> void:
 		_play_audio_cue(&"reward")
 		reward_title.text = current_table.get("name", "Table") + " cleared. Choose your edge."
 		var elite_case := _table_tier(current_table) >= 2
-		var clean_gloves := relic_ids.has(&"white_gloves") and table_scratches == 0
-		var choice_count := 4 if elite_case or clean_gloves else 3
+		var choice_count := 4 if elite_case else 3
 		var summary_height := 54.0 if choice_count >= 4 else 68.0
 		reward_summary_scroll.custom_minimum_size = Vector2(820, summary_height)
 		reward_summary_label.custom_minimum_size = Vector2(800, 0)
@@ -5509,8 +6712,6 @@ func _show_reward_draft(won: bool, table_unlocks: Array = []) -> void:
 		reward_summary_scroll.scroll_vertical = 0
 		if elite_case:
 			reward_title.text = current_table.get("name", "Table") + " cleared. Elite reward case is open."
-		elif clean_gloves:
-			reward_title.text = current_table.get("name", "Table") + " cleared clean. White Gloves opens the side case."
 		var choices := _roll_reward_choices(choice_count)
 		for i in range(reward_buttons.size()):
 			if i >= choices.size():
@@ -5542,7 +6743,10 @@ func _show_reward_draft(won: bool, table_unlocks: Array = []) -> void:
 
 func _table_clear_summary(table_unlocks: Array) -> String:
 	var lines: Array[String] = []
-	lines.append(_route_progress_text() + " clear | +" + str(table_score) + " score | " + str(shots_remaining) + " shots left | " + _cash_status_text() + " | Rep " + str(run_health))
+	lines.append(_route_progress_text() + " clear | +" + str(table_score) + " score | Balls " + str(run_health) + " | " + _cash_status_text())
+	if not table_challenge.is_empty():
+		var status := "paid" if bool(table_challenge.get("hit", false)) else "missed"
+		lines.append("Challenge: " + String(table_challenge.get("name", "Challenge")) + " " + status)
 	lines.append(_compact_next_table_pressure_text())
 	if last_summary != null and not last_summary.tags.is_empty():
 		lines.append("Last: " + _compact_tag_csv(last_summary.tags, 4))
@@ -5578,8 +6782,6 @@ func _reward_case_reason_text() -> String:
 	var reasons: Array[String] = []
 	if _table_tier(current_table) >= 2:
 		reasons.append("elite side case")
-	if relic_ids.has(&"white_gloves") and table_scratches == 0:
-		reasons.append("White Gloves clean case")
 	if reasons.is_empty():
 		reasons.append("standard house drawer")
 	return "Reason: " + " + ".join(reasons)
@@ -5619,18 +6821,12 @@ func _roll_reward_choices(choice_count: int = 3) -> Array[Dictionary]:
 		choices.append({"type": &"relic", "id": relic_choices[0]})
 	if relic_choices.size() > 1:
 		candidates.append({"type": &"relic", "id": relic_choices[1]})
-	var favor := _roll_favor_reward()
-	if not favor.is_empty():
-		candidates.append(favor)
 	var cue_work := _roll_cue_work_reward()
 	if not cue_work.is_empty():
 		candidates.append(cue_work)
 	var contract := _roll_contract_reward()
 	if not contract.is_empty():
 		candidates.append(contract)
-	var purge := _roll_purge_reward()
-	if not purge.is_empty():
-		candidates.append(purge)
 	candidates.append({"type": &"cash", "amount": 8 + table_index * 2 + tier_bonus * 5})
 	candidates.append({"type": &"chalk", "id": _roll_contextual_chalk_id()})
 	var best_fit_index := _best_contextual_offer_index(candidates)
@@ -5658,7 +6854,7 @@ func _best_contextual_offer_index(candidates: Array[Dictionary]) -> int:
 func _roll_favor_reward() -> Dictionary:
 	var favors: Array[Dictionary] = []
 	if run_cash >= 9 and run_health < 9:
-		favors.append({"type": &"favor", "id": &"rep_patch", "cost": 9, "health": 1})
+		favors.append({"type": &"favor", "id": &"ball_patch", "cost": 9, "health": 1})
 	if run_cash >= 7:
 		favors.append({"type": &"favor", "id": &"style_tab", "cost": 7, "style": 2})
 	if run_cash >= 5:
@@ -5681,8 +6877,6 @@ func _roll_cue_work_reward() -> Dictionary:
 
 func _roll_contract_reward() -> Dictionary:
 	var contracts: Array[Dictionary] = []
-	if not run_contract_ids.has(&"overtime_ledger"):
-		contracts.append({"type": &"contract", "id": &"overtime_ledger", "shots": 1})
 	if not run_contract_ids.has(&"soft_house_line"):
 		contracts.append({"type": &"contract", "id": &"soft_house_line", "ease": 0.10})
 	if not run_contract_ids.has(&"gold_skim"):
@@ -5784,8 +6978,8 @@ func _reward_title(reward: Dictionary) -> String:
 			return "Chalk Slip - " + _chalk_name(reward.get("id", &""))
 		&"favor":
 			match reward.get("id", &""):
-				&"rep_patch":
-					return "House Favor - Buy Reputation"
+				&"ball_patch":
+					return "House Favor - Buy Ball"
 				&"style_tab":
 					return "House Favor - Buy Style"
 				&"chalk_case":
@@ -5840,8 +7034,8 @@ func _reward_short_title(reward: Dictionary) -> String:
 			return _chalk_name(reward.get("id", &""))
 		&"favor":
 			match reward.get("id", &""):
-				&"rep_patch":
-					return "Buy Reputation"
+				&"ball_patch":
+					return "Buy Ball"
 				&"style_tab":
 					return "Buy Style"
 				&"chalk_case":
@@ -5871,7 +7065,7 @@ func _reward_effect_line(reward: Dictionary) -> String:
 		&"relic":
 			return relic_engine.get_description(reward.get("id", &""))
 		&"cash":
-			return "Bankroll for side bets and house favors."
+			return "Bankroll for table challenges and house favors."
 		&"chalk":
 			return _chalk_description(reward.get("id", &""))
 		&"favor":
@@ -5965,7 +7159,7 @@ func _reward_play_hint(reward: Dictionary) -> String:
 				_:
 					return "future table leverage."
 		&"purge":
-			return "blocks the next cursed-ball or cursed-pocket reputation hits."
+			return "blocks the next cursed-ball or cursed-pocket balls hits."
 		_:
 			return "general run value."
 
@@ -5993,8 +7187,8 @@ func _reward_dealer_reason(reward: Dictionary) -> String:
 			return "bankroll flexibility"
 		&"favor":
 			match reward.get("id", &""):
-				&"rep_patch":
-					return "rep insurance"
+				&"ball_patch":
+					return "ball insurance"
 				&"style_tab":
 					return "style multiplier"
 				&"chalk_case":
@@ -6027,7 +7221,7 @@ func _reward_fit_score(reward: Dictionary) -> int:
 				score += 1
 		&"favor":
 			match reward.get("id", &""):
-				&"rep_patch":
+				&"ball_patch":
 					if run_health <= 3:
 						score += 4
 				&"style_tab":
@@ -6084,14 +7278,14 @@ func _reward_context_hint(reward: Dictionary) -> String:
 			return "adds a new " + family + " angle to your current playbook."
 		&"cash":
 			if run_cash < 9:
-				return "cash keeps House Favor live when reputation gets thin."
+				return "cash keeps House Favor live when balls gets thin."
 			return "bankroll lets you buy favor and carry flexibility into harder rooms."
 		&"chalk":
 			return "one-shot tools let you solve a specific next-table route without changing the build."
 		&"favor":
 			match reward.get("id", &""):
-				&"rep_patch":
-					return "reputation is the run clock; this buys one more mistake."
+				&"ball_patch":
+					return "balls is the run clock; this buys one more mistake."
 				&"style_tab":
 					return "style improves the table-complete economy and rewards cleaner trick shots."
 				&"chalk_case":
@@ -6119,7 +7313,7 @@ func _reward_context_hint(reward: Dictionary) -> String:
 				_:
 					return "future-table leverage is strongest before elite rooms."
 		&"purge":
-			return "curse hits are coming; Cleanse blocks reputation loss without making scratches free."
+			return "curse hits are coming; Cleanse blocks balls loss without making scratches free."
 		_:
 			return "general run value."
 
@@ -6203,15 +7397,15 @@ func _reward_description(reward: Dictionary) -> String:
 		&"contract":
 			return _contract_description(reward)
 		&"purge":
-			return "Blocks the next " + str(int(reward.get("ward", 0))) + " curse reputation hits. Scratches still hurt."
+			return "Blocks the next " + str(int(reward.get("ward", 0))) + " curse hits. Scratches still hurt."
 		_:
 			return ""
 
 func _favor_description(reward: Dictionary) -> String:
 	var cost := int(reward.get("cost", 0))
 	match reward.get("id", &""):
-		&"rep_patch":
-			return "Pay $" + str(cost) + " to restore 1 reputation."
+		&"ball_patch":
+			return "Pay $" + str(cost) + " to restore 1 ball."
 		&"style_tab":
 			return "Pay $" + str(cost) + " for +2 Style. Each Style adds +2% score, capped at x1.30."
 		&"chalk_case":
@@ -6248,6 +7442,10 @@ func _on_reward_button_pressed(index: int) -> void:
 		return
 	reward_choice_locked = true
 	var reward: Dictionary = reward_buttons[index].get_meta("reward", {})
+	if reward.get("type", &"") == &"challenge":
+		_apply_table_challenge_choice(reward)
+		reward_choice_locked = false
+		return
 	_apply_reward_choice(reward)
 	_continue_after_panel()
 
@@ -6275,9 +7473,9 @@ func _apply_reward_choice(reward: Dictionary) -> void:
 				return
 			_apply_cash_delta(-cost)
 			match reward.get("id", &""):
-				&"rep_patch":
+				&"ball_patch":
 					run_health = clampi(run_health + int(reward.get("health", 0)), 0, 9)
-					_show_float("Favor: +Rep", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.42, 0.72), 24)
+					_show_float("Favor: +Ball", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.42, 0.72), 24)
 				&"style_tab":
 					run_style += int(reward.get("style", 0))
 					_show_float("Favor: +Style", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.42, 0.72), 24)
@@ -6322,6 +7520,7 @@ func _show_run_complete() -> void:
 		if _is_full_route_contract():
 			runs_completed += 1
 			_unlock_board(&"house_vault")
+			_award_meta_chips(META_FULL_ROUTE_BONUS, "Full route")
 	_save_progress()
 	reward_panel.visible = true
 	if shot_receipt_panel != null:
@@ -6352,7 +7551,7 @@ func _show_run_failed() -> void:
 	reward_summary_scroll.custom_minimum_size = Vector2(860, 390)
 	reward_summary_label.custom_minimum_size = Vector2(820, 0)
 	reward_summary_scroll.visible = true
-	reward_title.text = "Practice line closed." if practice_run else ("5-table contract failed. Marker called in." if _is_short_contract() else "Run failed. Reputation spent.")
+	reward_title.text = "Practice line closed." if practice_run else ("5-table contract failed. No balls left." if _is_short_contract() else "Run failed. No balls left.")
 	reward_summary_label.text = _run_end_summary(false)
 	_print_run_report_to_console(false)
 	reward_summary_scroll.scroll_vertical = 0
@@ -6365,7 +7564,7 @@ func _run_end_summary(cleared_run: bool) -> String:
 	var lines: Array[String] = []
 	var verdict := "Practice marker is paid." if cleared_run else "Practice marker closed before the route was clean."
 	if not practice_run:
-		verdict = "The contract is paid." if cleared_run else "The table keeps a marker in your name."
+		verdict = "The contract is paid." if cleared_run else "No balls left. The contract closes."
 		if _is_short_contract():
 			verdict = "The 5-table contract is paid." if cleared_run else "The 5-table contract closed early."
 	lines.append(verdict)
@@ -6374,8 +7573,9 @@ func _run_end_summary(cleared_run: bool) -> String:
 	elif _is_short_contract():
 		lines.append("Short contract: table unlocks and best score are written, but full-route completion stays unclaimed.")
 	lines.append("Seed " + str(run_seed))
-	lines.append(_contract_route_name_text() + " | Rooms " + str(run_table_ledger.size()) + "/" + str(_run_table_goal_count()) + " | Score " + str(run_score) + " | Best " + str(best_run_score) + " | " + _cash_status_text() + " | " + _style_status_text() + " | Rep " + str(run_health))
+	lines.append(_contract_route_name_text() + " | Rooms " + str(run_table_ledger.size()) + "/" + str(_run_table_goal_count()) + " | Score " + str(run_score) + " | Best " + str(best_run_score) + " | " + _cash_status_text() + " | Balls " + str(run_health))
 	lines.append("Cue " + _cue_name(selected_cue_id) + " | Board " + _board_name(selected_board_id))
+	lines.append("Back Room Chips " + str(_meta_unspent_chips()) + "/" + str(meta_chips_total) + " | " + _meta_effect_summary())
 	lines.append(_run_upgrade_summary())
 	lines.append("")
 	lines.append("Route Ledger")
@@ -6451,6 +7651,30 @@ func _aim_direction() -> Vector2:
 	if dir.length() < 4.0:
 		return Vector2.RIGHT
 	return dir.normalized()
+
+func _rescue_cue_ball_from_pocket_mouth(aim_dir: Vector2) -> void:
+	if cue_ball == null or cue_ball.potted:
+		return
+	var pocket = _nearest_pocket(cue_ball.global_position)
+	if pocket == null:
+		return
+	var local := _pocket_local_position(cue_ball.global_position, pocket)
+	var depth := float(local.get("depth", 9999.0))
+	var lateral := float(local.get("lateral", 9999.0))
+	var half_width := _pocket_mouth_half_width(pocket) + BALL_RADIUS * 0.55
+	if depth > POCKET_MOUTH_DEPTH + BALL_RADIUS * 0.2 or depth < -_pocket_fall_depth(pocket):
+		return
+	if absf(lateral) > half_width:
+		return
+	var inward := _pocket_inward_axis(pocket)
+	var tangent := _pocket_tangent_axis(pocket)
+	var safe_depth := POCKET_MOUTH_DEPTH + BALL_RADIUS * 1.35
+	var safe_lateral := clampf(lateral, -_pocket_mouth_half_width(pocket) * 0.45, _pocket_mouth_half_width(pocket) * 0.45)
+	var safe_pos: Vector2 = pocket.global_position + inward * safe_depth + tangent * safe_lateral
+	safe_pos = _clamp_ball_inside_table(safe_pos, BALL_RADIUS + 8.0)
+	if aim_dir.dot(inward) < -0.25:
+		safe_pos += inward * BALL_RADIUS * 0.35
+	cue_ball.redirect_active(safe_pos, Vector2.ZERO, 0.0)
 
 func _adjust_cue_spin(delta_spin: Vector2) -> void:
 	cue_spin.x = clampf(cue_spin.x + delta_spin.x, -MAX_SPIN, MAX_SPIN)
@@ -6625,7 +7849,7 @@ func _update_hud() -> void:
 		return
 	hud_labels["title"].text = _contract_room_progress_text() + "  " + String(current_table.get("name", "Table"))
 	hud_labels["objective"].text = _objective_progress_text()
-	hud_labels["stats"].text = "Shots " + str(shots_remaining) + " | Table " + str(table_score) + " | Rep " + str(run_health) + " | " + _cash_status_text() + " | " + _side_bet_status_text() + " | " + _called_pocket_text()
+	hud_labels["stats"].text = "Shot " + str(table_shots_used + 1) + " | Table " + str(table_score) + " | Balls " + str(run_health) + " | " + _cash_status_text() + " | " + _challenge_status_text() + " | " + _called_pocket_text()
 	hud_labels["route"].text = ""
 	hud_labels["rival"].text = ""
 	hud_labels["tags"].text = ""
@@ -6662,7 +7886,7 @@ func _run_pressure_text() -> String:
 		return "Heat: -"
 	var heat := "steady"
 	if run_health <= 1:
-		heat = "last marker"
+		heat = "last ball"
 	elif run_health <= 3:
 		heat = "thin ice"
 	if current_table.get("objective", &"") == &"boss":
@@ -6673,6 +7897,12 @@ func _run_pressure_text() -> String:
 
 func _run_upgrade_summary() -> String:
 	var parts: Array[String] = []
+	if _meta_preview_bonus() > 0.0:
+		parts.append("Training Aim +" + str(int(round(_meta_preview_bonus() * 100.0))) + "%")
+	if _meta_power_bonus() > 0.0:
+		parts.append("Training Power +" + str(int(round(_meta_power_bonus() * 100.0))) + "%")
+	if _meta_extra_shot_bonus() > 0:
+		parts.append("Training Balls +" + str(_meta_extra_shot_bonus()))
 	if run_cue_aim_bonus > 0.0:
 		parts.append("Aim +" + str(int(round(run_cue_aim_bonus * 100.0))) + "%")
 	if run_cue_power_bonus > 0.0:
@@ -6712,9 +7942,7 @@ func _table_piece_dossier_text(table_def: Dictionary) -> String:
 	if int(counts.get(&"gold", 0)) > 0:
 		specials.append("gold $" + " x" + str(int(counts.get(&"gold", 0))))
 	if int(counts.get(&"cursed", 0)) > 0:
-		var curse_note := "cursed -Rep"
-		if relic_ids.has(&"witchwood_triangle") or run_curse_ward > 0:
-			curse_note = "cursed covered"
+		var curse_note := "cursed bonus"
 		specials.append(curse_note + " x" + str(int(counts.get(&"cursed", 0))))
 	if int(counts.get(&"bomb", 0)) > 0:
 		specials.append("bomb B x" + str(int(counts.get(&"bomb", 0))))
@@ -6745,7 +7973,7 @@ func _table_piece_counts(table_def: Dictionary) -> Dictionary:
 		counts[kind] = int(counts.get(kind, 0)) + 1
 		if bool(spec.get("marked", false)):
 			counts[&"marked"] = int(counts[&"marked"]) + 1
-	if relic_ids.has(&"gold_leaf") and table_def.get("objective", &"") != &"boss":
+	if relic_ids.has(&"money_ball") and table_def.get("objective", &"") != &"boss":
 		counts[&"object"] = int(counts[&"object"]) + 1
 		counts[&"gold"] = int(counts[&"gold"]) + 1
 	return counts
@@ -6763,7 +7991,7 @@ func _table_opening_read_text(table_def: Dictionary) -> String:
 func _table_danger_text(table_def: Dictionary) -> String:
 	var cursed_pocket: StringName = table_def.get("cursed_pocket", &"")
 	if cursed_pocket != &"":
-		return "Danger: " + String(cursed_pocket) + " cursed (-1 Rep)"
+		return "Danger: " + String(cursed_pocket) + " cursed pocket"
 	return ""
 
 func _clean_table_status_text() -> String:
@@ -6848,7 +8076,7 @@ func _modifier_display_text(modifier: StringName) -> String:
 		&"gold_rush":
 			return "Gold balls expire on a timer."
 		&"tag_trial":
-			return "Earn the listed shot tags before shots run out."
+			return "Earn the listed shot tags while clearing the rack."
 		&"sticky_felt":
 			return "Sticky zones drag balls and reward stronger routing."
 		&"boss":
@@ -6926,7 +8154,7 @@ func _short_table_name(name: String) -> String:
 			return "Brawl"
 		"Gold Rush":
 			return "Gold"
-		"Side Bet Alley":
+		"Table Challenge Alley":
 			return "SideBet"
 		"Carom Chapel":
 			return "Carom"
@@ -7051,7 +8279,13 @@ func _event_line(event: GameplayEvent) -> String:
 		GameplayEvent.Type.RAIL_HIT:
 			return "Rail " + String(event.data.get("rail_id", &"rail")) + " v" + str(int(round(float(event.data.get("speed", 0.0)))))
 		GameplayEvent.Type.BALL_POTTED:
-			return "Pot " + String(event.data.get("kind", &"")) + " -> " + String(event.data.get("pocket_id", &"")) + " d" + str(int(round(float(event.data.get("travel", 0.0)))))
+			var flags: Array[String] = []
+			if bool(event.data.get("ricochet", false)):
+				flags.append("ricochet")
+			if bool(event.data.get("chain", false)):
+				flags.append("chain")
+			var suffix := (" [" + ", ".join(flags) + "]") if not flags.is_empty() else ""
+			return "Pot " + String(event.data.get("kind", &"")) + " -> " + String(event.data.get("pocket_id", &"")) + " d" + str(int(round(float(event.data.get("travel", 0.0))))) + suffix
 		GameplayEvent.Type.SCRATCH:
 			return "Scratch -> " + String(event.data.get("pocket_id", &""))
 		GameplayEvent.Type.BOSS_DAMAGED:
@@ -7086,12 +8320,38 @@ func _draw() -> void:
 	for j in range(5):
 		var y := TABLE_RECT.position.y + j * TABLE_RECT.size.y / 4.0
 		draw_line(Vector2(TABLE_RECT.position.x, y), Vector2(TABLE_RECT.end.x, y + 54), Color(1, 1, 1, 0.035), 1.0)
+	_draw_last_ball_drama(accent)
+	_draw_fire_trails()
+	_draw_score_trails()
 	draw_rect(Rect2(TABLE_RECT.position - Vector2(5, 5), TABLE_RECT.size + Vector2(10, 10)), Color(accent.r, accent.g, accent.b, 0.38), false, 4.0)
 	draw_rect(Rect2(TABLE_RECT.position - Vector2(RAIL_THICKNESS, RAIL_THICKNESS), TABLE_RECT.size + Vector2(RAIL_THICKNESS * 2.0, RAIL_THICKNESS * 2.0)), Color(accent.r, accent.g, accent.b, 0.62), false, 3.0)
 	_draw_rail_flashes(accent)
+	_draw_aim_test_overlay()
 	_draw_play_status_strip(accent)
 	_draw_hovered_ball_ring(accent)
 	_draw_power_and_aim(accent)
+
+func _draw_last_ball_drama(accent: Color) -> void:
+	if last_ball_drama_strength <= 0.02:
+		return
+	var t := clampf(last_ball_drama_strength * _juice_vfx_scale(), 0.0, 1.0)
+	var pulse := 0.5 + 0.5 * sin(room_pulse * lerpf(9.0, 20.0, t))
+	var gold := Color(1.0, 0.82, 0.18, 0.0)
+	var cyan := Color(0.36, 1.0, 0.86, 0.0)
+	var ball_pos := last_ball_drama_ball_pos
+	var pocket_pos := last_ball_drama_pocket_pos
+	if ball_pos != Vector2.ZERO:
+		draw_circle(ball_pos, BALL_RADIUS + 18.0 + pulse * 8.0 + t * 16.0, Color(gold.r, gold.g, gold.b, 0.10 * t))
+		draw_arc(ball_pos, BALL_RADIUS + 12.0 + pulse * 6.0, -room_pulse * 4.0, TAU - room_pulse * 4.0, 54, Color(1.0, 0.88, 0.26, 0.72 * t), 3.0 + t * 2.0)
+	if pocket_pos != Vector2.ZERO:
+		draw_circle(pocket_pos, 36.0 + t * 34.0 + pulse * 8.0, Color(cyan.r, cyan.g, cyan.b, 0.075 * t))
+		draw_arc(pocket_pos, 44.0 + pulse * 12.0 + t * 28.0, room_pulse * 3.4, TAU + room_pulse * 3.4, 64, Color(0.42, 1.0, 0.88, 0.52 * t), 3.0 + t * 2.0)
+	if ball_pos != Vector2.ZERO and pocket_pos != Vector2.ZERO:
+		draw_line(ball_pos, pocket_pos, Color(accent.r, accent.g, accent.b, 0.16 * t), 2.0 + t * 3.0)
+		if t > 0.58:
+			var font := ThemeDB.fallback_font
+			var label_pos := ball_pos.lerp(pocket_pos, 0.52) + Vector2(0, -34.0 - pulse * 8.0)
+			draw_string(font, label_pos, "LAST BALL", HORIZONTAL_ALIGNMENT_CENTER, 150.0, int(16 + t * 10), Color(1.0, 0.92, 0.34, 0.80 * t))
 
 func _draw_rail_flashes(accent: Color) -> void:
 	if rail_flash.is_empty():
@@ -7106,6 +8366,33 @@ func _draw_rail_flashes(accent: Color) -> void:
 		draw_rect(rect.grow(4.0 + t * 5.0), fill)
 		draw_rect(rect.grow(5.0 + t * 5.0), edge, false, 3.0 + t * 2.0)
 
+func _draw_aim_test_overlay() -> void:
+	if not browser_aim_test_enabled and browser_aim_test_result_text == "":
+		return
+	if browser_aim_test_visual_case.is_empty():
+		return
+	var font := ThemeDB.fallback_font
+	var target_pos: Vector2 = browser_aim_test_visual_case.get("target_pos", Vector2.ZERO)
+	var cue_center: Vector2 = browser_aim_test_visual_case.get("preview_cue_center", Vector2.ZERO)
+	var expected_target: Vector2 = browser_aim_test_visual_case.get("preview_target_dir", Vector2.ZERO)
+	var expected_cue: Vector2 = browser_aim_test_visual_case.get("preview_cue_dir", Vector2.ZERO)
+	var label_pos := TABLE_RECT.position + Vector2(18.0, 24.0)
+	draw_rect(Rect2(label_pos - Vector2(10.0, 20.0), Vector2(600.0, 52.0)), Color(0.0, 0.0, 0.0, 0.64))
+	draw_string(font, label_pos, "AIM PREVIEW LIVE TEST", HORIZONTAL_ALIGNMENT_LEFT, 260.0, 18, Color(0.82, 1.0, 1.0, 0.96))
+	draw_string(font, label_pos + Vector2(0.0, 24.0), browser_aim_test_result_text, HORIZONTAL_ALIGNMENT_LEFT, 580.0, 17, Color(1.0, 0.90, 0.45, 0.96))
+	if expected_target.length_squared() > 0.01:
+		draw_line(target_pos, target_pos + expected_target.normalized() * 170.0, Color(0.28, 0.96, 1.0, 0.84), 5.0)
+		draw_string(font, target_pos + expected_target.normalized() * 176.0 + Vector2(4.0, -4.0), "preview target", HORIZONTAL_ALIGNMENT_LEFT, 130.0, 14, Color(0.60, 1.0, 1.0, 0.88))
+	if expected_cue.length_squared() > 0.01:
+		draw_line(cue_center, cue_center + expected_cue.normalized() * 132.0, Color(1.0, 0.78, 0.28, 0.84), 4.0)
+		draw_string(font, cue_center + expected_cue.normalized() * 138.0 + Vector2(4.0, 14.0), "preview cue", HORIZONTAL_ALIGNMENT_LEFT, 110.0, 14, Color(1.0, 0.84, 0.42, 0.88))
+	if browser_aim_test_actual_target_dir.length_squared() > 0.01:
+		draw_line(target_pos, target_pos + browser_aim_test_actual_target_dir.normalized() * 170.0, Color(0.38, 1.0, 0.44, 0.90), 2.0)
+		draw_circle(target_pos + browser_aim_test_actual_target_dir.normalized() * 170.0, 5.0, Color(0.38, 1.0, 0.44, 0.95))
+	if browser_aim_test_actual_cue_dir.length_squared() > 0.01:
+		draw_line(cue_center, cue_center + browser_aim_test_actual_cue_dir.normalized() * 132.0, Color(1.0, 0.42, 0.16, 0.90), 2.0)
+		draw_circle(cue_center + browser_aim_test_actual_cue_dir.normalized() * 132.0, 5.0, Color(1.0, 0.42, 0.16, 0.95))
+
 func _draw_play_status_strip(accent: Color) -> void:
 	if current_table.is_empty():
 		return
@@ -7114,7 +8401,7 @@ func _draw_play_status_strip(accent: Color) -> void:
 	draw_rect(strip, Color(0.012, 0.010, 0.018, 0.82))
 	draw_rect(strip, Color(accent.r, accent.g, accent.b, 0.44), false, 2.0)
 	var title := _contract_room_progress_text() + "  " + String(current_table.get("name", "Table")) + "  |  Pot $" + str(table_pot) + "  |  " + _objective_progress_text()
-	var stats := "Shots " + str(shots_remaining) + " | Table " + str(table_score) + " | Rep " + str(run_health) + " | " + _cash_status_text() + " | " + _side_bet_status_text() + " | " + _called_pocket_text()
+	var stats := "Shot " + str(table_shots_used + 1) + " | Table " + str(table_score) + " | Balls " + str(run_health) + " | " + _cash_status_text() + " | " + _challenge_status_text() + " | " + _called_pocket_text()
 	draw_string(font, strip.position + Vector2(18.0, 29.0), title, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 36.0, 24, Color(1.0, 0.90, 0.62, 0.95))
 	draw_string(font, strip.position + Vector2(18.0, 61.0), stats, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 190.0, 20, Color(0.86, 0.96, 1.0, 0.92))
 	draw_string(font, strip.position + Vector2(strip.size.x - 160.0, 61.0), "Relics " + str(relic_ids.size()), HORIZONTAL_ALIGNMENT_RIGHT, 140.0, 20, Color(1.0, 0.82, 0.36, 0.94))
@@ -7441,19 +8728,29 @@ func _draw_hovered_ball_ring(accent: Color) -> void:
 	draw_arc(hovered_ball.global_position, ring_radius, 0.0, TAU, 48, Color(accent.r, accent.g, accent.b, 0.95), 3.0)
 	draw_arc(hovered_ball.global_position, ring_radius + 5.0, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.32), 1.5)
 
+func _draw_chain_heat_cue_glow() -> void:
+	var pulse := 0.5 + 0.5 * sin(room_pulse * 6.0)
+	var base_radius: float = float(cue_ball.radius)
+	draw_circle(cue_ball.global_position, base_radius + 16.0 + pulse * 5.0, Color(1.0, 0.34, 0.06, 0.10))
+	draw_arc(cue_ball.global_position, base_radius + 10.0 + pulse * 3.0, 0.0, TAU, 48, Color(1.0, 0.58, 0.12, 0.86), 3.0)
+	draw_arc(cue_ball.global_position, base_radius + 17.0 + pulse * 4.0, -room_pulse * 3.2, TAU - room_pulse * 3.2, 56, Color(1.0, 0.88, 0.24, 0.52), 2.0)
+
 func _draw_power_and_aim(accent: Color) -> void:
 	if cue_ball == null or not is_instance_valid(cue_ball) or cue_ball.potted:
 		return
 	if state != State.AIMING and state != State.CHARGING_SHOT:
 		return
 	var dir := _aim_direction()
-	var aim_len := 260.0 * float(_cue_def(selected_cue_id).get("aim", 1.0)) * (1.0 + run_cue_aim_bonus)
-	if relic_ids.has(&"dead_eye_lens") and called_pocket_id != &"":
-		aim_len = 410.0
+	if chain_heat_ready:
+		_draw_chain_heat_cue_glow()
+	var aim_len := 260.0 * float(_cue_def(selected_cue_id).get("aim", 1.0)) * (1.0 + run_cue_aim_bonus + _meta_preview_bonus())
+	if _relic_preview_active(&"sniper"):
+		aim_len = 900.0
 	if equipped_chalk_id == &"blue_chalk":
 		aim_len *= 1.35
 	var ball_edge: float = float(cue_ball.radius) + 7.0
-	var cue_gap: float = 26.0
+	var power_amount := pow(charge_t, 1.45)
+	var cue_gap: float = 26.0 + power_amount * 46.0
 	var tip_inner_offset: float = float(cue_ball.radius) + cue_gap
 	var tip_outer_offset: float = tip_inner_offset + 16.0
 	var shaft_outer_offset: float = tip_inner_offset + 122.0
@@ -7470,15 +8767,24 @@ func _draw_power_and_aim(accent: Color) -> void:
 	draw_line(cue_ball.global_position + dir * ball_edge, aim_end, Color(0.82, 1.0, 1.0, 0.88), 3.0)
 	if not preview.is_empty():
 		_draw_first_contact_preview(preview, accent)
+		var blue_read := equipped_chalk_id == &"blue_chalk"
+		var entropy_read := _relic_preview_active(&"entropy_scanner")
+		if blue_read and entropy_read:
+			_draw_entropy_preview(preview, Color(0.34, 0.78, 1.0), 5)
+		elif blue_read:
+			_draw_entropy_preview(preview, Color(0.34, 0.78, 1.0), 2)
+		elif entropy_read:
+			_draw_entropy_preview(preview, accent, 3)
 	draw_line(cue_ball.global_position - dir * shaft_outer_offset, cue_ball.global_position - dir * tip_inner_offset, Color(cue_glow.r, cue_glow.g, cue_glow.b, 0.28), cue_width + 6.0)
 	draw_line(cue_ball.global_position - dir * shaft_outer_offset, cue_ball.global_position - dir * tip_outer_offset, cue_shaft, cue_width)
 	draw_line(cue_ball.global_position - dir * tip_outer_offset, cue_ball.global_position - dir * tip_inner_offset, cue_wrap, cue_width + 2.0)
 	draw_circle(cue_ball.global_position - dir * tip_inner_offset, maxf(3.0, cue_width * 0.45), cue_tip)
-	_draw_spin_reticle(accent)
-	var bar_pos := TABLE_RECT.position + Vector2(TABLE_RECT.size.x - 220, -72)
-	draw_rect(Rect2(bar_pos, Vector2(200, 18)), Color(0.02, 0.02, 0.025, 0.8))
-	draw_rect(Rect2(bar_pos, Vector2(200 * pow(charge_t, 1.45), 18)), Color(accent.r, accent.g, accent.b, 0.95))
-	draw_rect(Rect2(bar_pos, Vector2(200, 18)), Color(1, 1, 1, 0.55), false, 2.0)
+	_draw_field_power_meter(dir, accent, power_amount, tip_inner_offset)
+	if cue_spin.length() > 0.01:
+		_draw_spin_reticle(accent)
+
+func _relic_preview_active(id: StringName) -> bool:
+	return relic_ids.has(id) and table_shots_used < 3
 
 func _first_contact_preview(dir: Vector2, aim_len: float) -> Dictionary:
 	if cue_ball == null or not is_instance_valid(cue_ball):
@@ -7512,12 +8818,33 @@ func _first_contact_preview(dir: Vector2, aim_len: float) -> Dictionary:
 	var target_dir := (target_center - cue_center).normalized()
 	if target_dir.length_squared() <= 0.0:
 		target_dir = dir
+	var incoming_dir := dir.normalized()
+	var cue_ricochet_dir := _preview_cue_after_ball_contact(incoming_dir, target_dir)
 	return {
 		"ball": best_ball,
 		"cue_center": cue_center,
 		"contact": cue_center + target_dir * cue_radius,
-		"target_dir": target_dir
+		"target_dir": target_dir,
+		"cue_ricochet_dir": cue_ricochet_dir
 	}
+
+func _preview_cue_after_ball_contact(incoming_dir: Vector2, target_dir: Vector2) -> Vector2:
+	if incoming_dir.length_squared() <= 0.01 or target_dir.length_squared() <= 0.01:
+		return Vector2.ZERO
+	incoming_dir = incoming_dir.normalized()
+	target_dir = target_dir.normalized()
+	var normal_speed := maxf(0.0, incoming_dir.dot(target_dir))
+	var tangent_component := incoming_dir - target_dir * normal_speed
+	var restitution := clampf(PREVIEW_BALL_RESTITUTION, 0.0, 1.0)
+	var residual_normal := target_dir * normal_speed * ((1.0 - restitution) * 0.5)
+	var cue_after := tangent_component + residual_normal
+	var side_dir := Vector2(-incoming_dir.y, incoming_dir.x)
+	var spin_power := 1.0 + run_cue_spin_bonus
+	cue_after += side_dir * cue_spin.x * PREVIEW_CUE_SIDE_SPIN * spin_power
+	cue_after += incoming_dir * cue_spin.y * PREVIEW_CUE_FOLLOW_SPIN * spin_power
+	if cue_after.length() > 0.03:
+		return cue_after.normalized()
+	return Vector2.ZERO
 
 func _draw_first_contact_preview(preview: Dictionary, accent: Color) -> void:
 	var ball = preview.get("ball")
@@ -7526,6 +8853,7 @@ func _draw_first_contact_preview(preview: Dictionary, accent: Color) -> void:
 	var cue_center: Vector2 = preview.get("cue_center", Vector2.ZERO)
 	var contact: Vector2 = preview.get("contact", cue_center)
 	var target_dir: Vector2 = preview.get("target_dir", Vector2.RIGHT)
+	var cue_ricochet_dir: Vector2 = preview.get("cue_ricochet_dir", Vector2.ZERO)
 	var target_start: Vector2 = ball.global_position + target_dir * (float(ball.radius) + 6.0)
 	var target_end: Vector2 = target_start + target_dir * 118.0
 	draw_circle(cue_center, float(cue_ball.radius), Color(0.82, 1.0, 1.0, 0.14))
@@ -7533,6 +8861,87 @@ func _draw_first_contact_preview(preview: Dictionary, accent: Color) -> void:
 	draw_circle(contact, 5.0, Color(1.0, 0.86, 0.32, 0.92))
 	draw_line(target_start, target_end, Color(accent.r, accent.g, accent.b, 0.72), 2.0)
 	draw_circle(target_end, 4.0, Color(accent.r, accent.g, accent.b, 0.82))
+	if cue_ricochet_dir.length() > 0.01:
+		var cue_rebound_start := cue_center + cue_ricochet_dir * (float(cue_ball.radius) + 6.0)
+		var cue_rebound_end := cue_rebound_start + cue_ricochet_dir * 96.0
+		draw_line(cue_rebound_start, cue_rebound_end, Color(0.82, 1.0, 1.0, 0.56), 2.0)
+		draw_circle(cue_rebound_end, 3.5, Color(0.82, 1.0, 1.0, 0.72))
+
+func _draw_entropy_preview(preview: Dictionary, accent: Color, max_steps: int = 3) -> void:
+	var source = preview.get("ball")
+	if source == null or not is_instance_valid(source):
+		return
+	var origin: Vector2 = source.global_position
+	var dir: Vector2 = preview.get("target_dir", Vector2.RIGHT)
+	if dir.length_squared() <= 0.01:
+		return
+	var used: Dictionary = {}
+	used[source.ball_id] = true
+	var alpha := 0.58
+	for step in range(max_steps):
+		var hit = _preview_next_ball(origin, dir, used)
+		if hit.is_empty():
+			var end := origin + dir * (150.0 - step * 24.0)
+			draw_line(origin + dir * (BALL_RADIUS + 9.0), end, Color(accent.r, accent.g, accent.b, alpha * 0.62), 1.5)
+			break
+		var ball = hit.get("ball")
+		var contact: Vector2 = hit.get("contact", origin)
+		var next_dir: Vector2 = hit.get("dir", dir)
+		draw_line(origin + dir * (BALL_RADIUS + 9.0), contact, Color(accent.r, accent.g, accent.b, alpha), 2.0)
+		draw_circle(contact, 4.0, Color(accent.r, accent.g, accent.b, alpha + 0.12))
+		if ball != null and is_instance_valid(ball):
+			used[ball.ball_id] = true
+			origin = ball.global_position
+			dir = next_dir
+		alpha *= 0.72
+
+func _preview_next_ball(origin: Vector2, dir: Vector2, used: Dictionary) -> Dictionary:
+	var best_t := 9999.0
+	var best_ball = null
+	var best_contact := Vector2.ZERO
+	var best_dir := Vector2.ZERO
+	var moving_radius := BALL_RADIUS
+	for ball in _active_balls():
+		if ball.potted or used.has(ball.ball_id):
+			continue
+		var to_ball: Vector2 = ball.global_position - origin
+		var along := to_ball.dot(dir)
+		if along <= BALL_RADIUS * 1.4 or along > best_t:
+			continue
+		var closest_sq := to_ball.length_squared() - along * along
+		var inflated_radius := moving_radius + float(ball.radius)
+		var radius_sq := inflated_radius * inflated_radius
+		if closest_sq > radius_sq:
+			continue
+		var offset := sqrt(maxf(0.0, radius_sq - closest_sq))
+		var contact_t := along - offset
+		if contact_t <= moving_radius or contact_t > best_t:
+			continue
+		var moving_center := origin + dir.normalized() * contact_t
+		var next_dir: Vector2 = (ball.global_position - moving_center).normalized()
+		if next_dir.length_squared() <= 0.01:
+			next_dir = dir.normalized()
+		best_t = contact_t
+		best_ball = ball
+		best_contact = moving_center
+		best_dir = next_dir
+	if best_ball == null:
+		return {}
+	return {"ball": best_ball, "contact": best_contact, "dir": best_dir}
+
+func _draw_field_power_meter(dir: Vector2, accent: Color, power_amount: float, tip_inner_offset: float) -> void:
+	if state != State.CHARGING_SHOT:
+		return
+	var side := Vector2(-dir.y, dir.x)
+	var origin: Vector2 = cue_ball.global_position - dir * (tip_inner_offset + 36.0) + side * 26.0
+	var length := 112.0
+	var base_start := origin - dir * length * 0.5
+	var base_end := origin + dir * length * 0.5
+	var fill_end := base_start.lerp(base_end, clampf(power_amount, 0.0, 1.0))
+	draw_line(base_start, base_end, Color(0.015, 0.012, 0.018, 0.86), 10.0)
+	draw_line(base_start, fill_end, Color(accent.r, accent.g, accent.b, 0.94), 8.0)
+	draw_line(base_start, base_end, Color(1.0, 1.0, 1.0, 0.42), 2.0)
+	draw_circle(fill_end, 5.0, Color(1.0, 0.86, 0.36, 0.95))
 
 func _draw_spin_reticle(accent: Color) -> void:
 	var center: Vector2 = cue_ball.global_position + Vector2(54, -54)

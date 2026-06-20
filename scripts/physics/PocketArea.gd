@@ -34,7 +34,7 @@ func _physics_process(_delta: float) -> void:
 		return
 	for body in get_overlapping_bodies():
 		if body is PoolBall:
-			table.on_pocket_entered(body, self, true)
+			table.on_pocket_entered(body, self, false)
 
 func pop() -> void:
 	pulse = 1.0
@@ -42,7 +42,7 @@ func pop() -> void:
 
 func _on_body_entered(body: Node) -> void:
 	if body is PoolBall and table != null and table.has_method("on_pocket_entered"):
-		table.on_pocket_entered(body, self, true)
+		table.on_pocket_entered(body, self, false)
 
 func _draw() -> void:
 	draw_circle(Vector2.ZERO, radius + 7.0 + pulse * 18.0, Color(tint.r, tint.g, tint.b, 0.10 + pulse * 0.20))

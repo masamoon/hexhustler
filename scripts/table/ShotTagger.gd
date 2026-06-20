@@ -17,6 +17,10 @@ func derive_tags(summary) -> Array[StringName]:
 		tags.append(&"CAROM")
 	if summary.has_successful_pot() and summary.kiss_pots > 0:
 		tags.append(&"KISS")
+	if summary.has_successful_pot() and summary.ricochet_pot_count > 0:
+		tags.append(&"RICOCHET_POT")
+	if summary.has_successful_pot() and summary.chain_pot_count > 0:
+		tags.append(&"CHAIN_POT")
 	if summary.scratch:
 		tags.append(&"SCRATCH")
 	if summary.has_successful_pot() and summary.power_normalized >= 0.74:

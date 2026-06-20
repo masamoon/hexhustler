@@ -1,6 +1,9 @@
 class_name ScoringEngine
 extends RefCounted
 
+func travel_score_for_distance(distance: float) -> int:
+	return clampi(int(round((distance - 110.0) * 0.34)), 0, 300)
+
 func score(summary, table_def: Dictionary, potted_records: Array[Dictionary], has_witchwood: bool) -> void:
 	var score_total := 0
 	var cash_total := 0
@@ -14,16 +17,15 @@ func score(summary, table_def: Dictionary, potted_records: Array[Dictionary], ha
 		var ball_score := int(record.get("score", 100))
 		var ball_cash := int(record.get("cash", 0))
 		var pocket_id: StringName = record.get("pocket_id", &"")
+		var travel_score := travel_score_for_distance(float(record.get("travel", 0.0)))
+		if travel_score > 0:
+			ball_score += travel_score
+			summary.travel_score_total += travel_score
+			summary.breakdown.append("Travel run: +" + str(travel_score))
 
-		if kind == &"cursed" and not has_witchwood:
-			summary.health_delta -= 1
-			summary.curse_damage += 1
-			summary.breakdown.append("Cursed ball: -1 rep")
-			continue
-
-		if kind == &"cursed" and has_witchwood:
-			ball_score += 160
-			summary.breakdown.append("Witchwood redeemed curse: +160")
+		if kind == &"cursed":
+			ball_score += 80
+			summary.breakdown.append("Cursed ball: +80")
 
 		if pocket_id == jackpot_pocket:
 			ball_score *= 3
@@ -31,10 +33,8 @@ func score(summary, table_def: Dictionary, potted_records: Array[Dictionary], ha
 			summary.breakdown.append("Jackpot pocket x3")
 		if cursed_pocket != &"" and pocket_id == cursed_pocket and not cursed_pocket_hit:
 			cursed_pocket_hit = true
-			summary.health_delta -= 1
-			summary.curse_damage += 1
 			ball_score = max(0, ball_score - 60)
-			summary.breakdown.append("Cursed pocket: -60, -1 rep")
+			summary.breakdown.append("Cursed pocket: -60")
 
 		if modifier == &"bank_bonus":
 			if summary.tags.has(&"BANK"):
@@ -47,6 +47,13 @@ func score(summary, table_def: Dictionary, potted_records: Array[Dictionary], ha
 		if kind == &"gold":
 			ball_cash += 5
 			summary.breakdown.append("Gold ball: +$5")
+
+		if bool(record.get("ricochet", false)):
+			ball_score += 260
+			summary.breakdown.append("Ricochet pot: +260")
+		if bool(record.get("chain", false)):
+			ball_score += 110
+			summary.breakdown.append("Chain heat: +110")
 
 		score_total += ball_score
 		cash_total += ball_cash
@@ -90,8 +97,7 @@ func score(summary, table_def: Dictionary, potted_records: Array[Dictionary], ha
 		summary.breakdown.append("Called pocket: +" + str(called_bonus) + ", +1 Style")
 	if summary.scratch:
 		score_total = max(0, score_total - 120)
-		summary.health_delta -= 1
-		summary.breakdown.append("Scratch: -120, -1 rep")
+		summary.breakdown.append("Scratch: -120")
 	if summary.tags.has(&"POWER_SHOT") and not summary.has_successful_pot():
 		score_total = max(0, score_total - 80)
 		summary.style_delta -= 1

@@ -2,215 +2,153 @@ class_name RelicEngine
 extends RefCounted
 
 const RELICS: Dictionary = {
-	&"bankers_ring": {
-		"name": "Banker's Ring",
+	&"money_ball": {
+		"name": "Money Ball",
 		"rarity": &"common",
-		"family": [&"Bank", &"Style"],
-		"text": "Bank pots score +25% and grant +1 Style."
+		"family": [&"Economy"],
+		"text": "Each table starts with one extra gold ball."
 	},
-	&"rail_tax": {
-		"name": "Rail Tax",
+	&"sniper": {
+		"name": "Sniper",
 		"rarity": &"common",
-		"family": [&"Bank", &"Economy"],
-		"text": "Successful pots pay $1 per rail hit."
+		"family": [&"Aim"],
+		"text": "For your first 3 shots each table, the preview line reaches maximum length."
+	},
+	&"entropy_scanner": {
+		"name": "Entropy Scanner",
+		"rarity": &"rare",
+		"family": [&"Aim", &"Ricochet"],
+		"text": "For your first 3 shots each table, previews show extra ricochet continuations."
 	},
 	&"center_cut": {
 		"name": "Center Cut",
 		"rarity": &"common",
 		"family": [&"Precision"],
-		"text": "Perfect pots add +250 score."
+		"text": "Perfect pots add score and $1."
 	},
-	&"cluster_breaker": {
-		"name": "Cluster Breaker",
-		"rarity": &"uncommon",
-		"family": [&"Chaos", &"Style"],
-		"text": "Moving 4+ balls grants $3 and +1 Style."
-	},
-	&"thunder_break": {
-		"name": "Thunder Break",
-		"rarity": &"uncommon",
-		"family": [&"Power", &"Break"],
-		"text": "First shot of a table moving 5+ balls adds +300 and $3."
-	},
-	&"gold_leaf": {
-		"name": "Gold Leaf",
-		"rarity": &"uncommon",
-		"family": [&"Economy"],
-		"text": "Each table starts with an extra gold ball."
-	},
-	&"witchwood_triangle": {
-		"name": "Witchwood Triangle",
-		"rarity": &"uncommon",
-		"family": [&"Curse", &"Safety"],
-		"text": "Cursed balls score instead of hurting you."
-	},
-	&"pocket_monopoly": {
-		"name": "Pocket Monopoly",
-		"rarity": &"rare",
-		"family": [&"Pocket", &"Economy"],
-		"text": "Repeated use of one pocket grows its score bonus."
-	},
-	&"dead_eye_lens": {
-		"name": "Dead-Eye Lens",
-		"rarity": &"rare",
-		"family": [&"Precision", &"Called"],
-		"text": "Called-pocket aim preview is longer, and called pots score extra."
-	},
-	&"high_roller_chip": {
-		"name": "High Roller Chip",
-		"rarity": &"rare",
-		"family": [&"Risk", &"Economy"],
-		"text": "Clear with shots spare to gain $6 and +250 score. Failed tables cost +1 reputation."
-	},
-	&"firecracker_ball": {
-		"name": "Firecracker Ball",
-		"rarity": &"rare",
-		"family": [&"Chaos", &"Power"],
-		"text": "The first potted ball each table detonates."
-	},
-	&"tip_jar": {
-		"name": "Tip Jar",
-		"rarity": &"uncommon",
-		"family": [&"Style", &"Economy"],
-		"text": "Completing a table converts Style into cash."
-	},
-	&"white_gloves": {
-		"name": "White Gloves",
-		"rarity": &"rare",
-		"family": [&"Precision", &"Reward"],
-		"text": "No-scratch table clears offer a fourth reward choice."
-	},
-	&"velvet_rails": {
-		"name": "Velvet Rails",
-		"rarity": &"uncommon",
-		"family": [&"Bank", &"Control"],
-		"text": "Rail bounces preserve extra speed."
-	},
-	&"no_loose_ends": {
-		"name": "No Loose Ends",
-		"rarity": &"rare",
-		"family": [&"Finisher", &"Score"],
-		"text": "Potting the last required ball adds a big score bonus."
-	},
-	&"side_bet_slip": {
-		"name": "Side-Bet Slip",
+	&"rail_coupon": {
+		"name": "Rail Coupon",
 		"rarity": &"common",
-		"family": [&"Called", &"Economy"],
-		"text": "Called-pocket pots add score and $2 per called hit."
+		"family": [&"Bank", &"Economy"],
+		"text": "Bank or kick pots pay cash."
 	},
-	&"chapel_candle": {
-		"name": "Chapel Candle",
+	&"combo_receipt": {
+		"name": "Combo Receipt",
 		"rarity": &"uncommon",
-		"family": [&"Carom", &"Style"],
-		"text": "Carom or kiss pots add score and +1 Style."
+		"family": [&"Multi-pot"],
+		"text": "Multi-pot shots add score and cash."
 	},
-	&"rain_check": {
-		"name": "Rain Check",
+	&"spare_ball": {
+		"name": "Spare Ball",
 		"rarity": &"uncommon",
-		"family": [&"Bank", &"Distance"],
-		"text": "Long pots pay cash; long bank pots pay even more."
+		"family": [&"Safety"],
+		"text": "Clearing a table with 3+ balls left restores 1 ball."
 	},
-	&"mirror_hex": {
-		"name": "Mirror Hex",
+	&"chalk_credit": {
+		"name": "Chalk Credit",
+		"rarity": &"uncommon",
+		"family": [&"Economy", &"Control"],
+		"text": "Soft-touch scoring shots pay cash."
+	},
+	&"long_glass": {
+		"name": "Long Glass",
+		"rarity": &"uncommon",
+		"family": [&"Distance"],
+		"text": "Long pots add score and cash."
+	},
+	&"hot_hand": {
+		"name": "Hot Hand",
 		"rarity": &"rare",
-		"family": [&"Safety", &"Risk"],
-		"text": "A scratch on a scoring shot refunds the reputation loss and adds score."
+		"family": [&"Chain"],
+		"text": "Chain Heat pots score more."
+	},
+	&"split_lens": {
+		"name": "Split Lens",
+		"rarity": &"rare",
+		"family": [&"Ricochet"],
+		"text": "Ricochet pots add extra cash."
+	},
+	&"called_tab": {
+		"name": "Called Tab",
+		"rarity": &"common",
+		"family": [&"Called"],
+		"text": "Called-pocket pots add cash."
+	},
+	&"bumper_policy": {
+		"name": "Bumper Policy",
+		"rarity": &"rare",
+		"family": [&"Chaos", &"Safety"],
+		"text": "Cluster-break shots add score and $1."
+	},
+	&"quiet_hands": {
+		"name": "Quiet Hands",
+		"rarity": &"rare",
+		"family": [&"Control"],
+		"text": "Soft Touch also grants +1 Style."
 	}
 }
 
 func apply_on_shot_resolve(summary, relic_ids: Array[StringName], context: Dictionary) -> void:
-	if relic_ids.has(&"bankers_ring") and summary.tags.has(&"BANK"):
-		summary.final_score = int(summary.final_score * 1.25)
-		summary.style_delta += 1
-		summary.breakdown.append("Banker's Ring: x1.25, +1 Style")
-
-	if relic_ids.has(&"rail_tax") and summary.has_successful_pot():
-		var cash: int = int(summary.rail_hits)
-		summary.cash_delta += cash
-		summary.breakdown.append("Rail Tax: +$" + str(cash))
-
 	if relic_ids.has(&"center_cut") and summary.tags.has(&"PERFECT_POT"):
-		var bonus: int = 250 * int(summary.perfect_pots)
+		var bonus: int = 180 * int(summary.perfect_pots)
 		summary.final_score += bonus
-		summary.breakdown.append("Center Cut: +" + str(bonus))
+		summary.cash_delta += int(summary.perfect_pots)
+		summary.breakdown.append("Center Cut: +" + str(bonus) + ", +$" + str(int(summary.perfect_pots)))
 
-	if relic_ids.has(&"cluster_breaker") and summary.tags.has(&"CLUSTER_BREAK"):
+	if relic_ids.has(&"rail_coupon") and (summary.tags.has(&"BANK") or summary.tags.has(&"KICK")):
 		summary.cash_delta += 3
-		summary.style_delta += 1
-		summary.breakdown.append("Cluster Breaker: +$3, +1 Style")
+		summary.breakdown.append("Rail Coupon: +$3")
 
-	if relic_ids.has(&"thunder_break") and int(context.get("table_shot_number", 0)) == 1 and summary.moved_ball_count >= 5:
-		summary.final_score += 300
+	if relic_ids.has(&"combo_receipt") and summary.tags.has(&"MULTI_POT"):
+		summary.final_score += 220
 		summary.cash_delta += 3
-		summary.breakdown.append("Thunder Break: +300, +$3")
+		summary.breakdown.append("Combo Receipt: +220, +$3")
 
-	if relic_ids.has(&"pocket_monopoly") and summary.has_successful_pot():
-		var pocket_use: Dictionary = context.get("pocket_use", {})
-		var best_bonus := 0
-		for pocket_id in summary.pocket_ids:
-			var uses := int(pocket_use.get(pocket_id, 0))
-			best_bonus = max(best_bonus, uses * 60)
-		if best_bonus > 0:
-			summary.final_score += best_bonus
-			summary.breakdown.append("Pocket Monopoly: +" + str(best_bonus))
+	if relic_ids.has(&"chalk_credit") and summary.tags.has(&"SOFT_TOUCH"):
+		summary.cash_delta += 2
+		summary.breakdown.append("Chalk Credit: +$2")
 
-	if relic_ids.has(&"dead_eye_lens") and summary.tags.has(&"CALLED_POCKET"):
-		var called_bonus: int = 120 * int(summary.called_pocket_hits)
-		summary.final_score += called_bonus
-		summary.breakdown.append("Dead-Eye Lens called shot: +" + str(called_bonus))
+	if relic_ids.has(&"long_glass") and summary.tags.has(&"LONG_POT"):
+		summary.final_score += 150
+		summary.cash_delta += 2
+		summary.breakdown.append("Long Glass: +150, +$2")
 
-	if relic_ids.has(&"no_loose_ends") and summary.has_successful_pot() and int(context.get("remaining_required_balls", 1)) == 0:
-		var end_bonus := maxi(240, int(summary.base_score * 0.75))
-		summary.final_score += end_bonus
-		summary.breakdown.append("No Loose Ends: +" + str(end_bonus))
+	if relic_ids.has(&"hot_hand") and summary.tags.has(&"CHAIN_POT"):
+		var hot_bonus := 130 * int(summary.chain_pot_count)
+		summary.final_score += hot_bonus
+		summary.breakdown.append("Hot Hand: +" + str(hot_bonus))
 
-	if relic_ids.has(&"side_bet_slip") and summary.tags.has(&"CALLED_POCKET"):
-		var called_hits := int(summary.called_pocket_hits)
-		var side_score := 80 * called_hits
-		var side_cash := 2 * called_hits
-		summary.final_score += side_score
-		summary.cash_delta += side_cash
-		summary.breakdown.append("Side-Bet Slip: +" + str(side_score) + ", +$" + str(side_cash))
+	if relic_ids.has(&"split_lens") and summary.tags.has(&"RICOCHET_POT"):
+		var cash := 3 * int(summary.ricochet_pot_count)
+		summary.cash_delta += cash
+		summary.breakdown.append("Split Lens: +$" + str(cash))
 
-	if relic_ids.has(&"chapel_candle") and (summary.tags.has(&"CAROM") or summary.tags.has(&"KISS")):
+	if relic_ids.has(&"called_tab") and summary.tags.has(&"CALLED_POCKET"):
+		var called_cash := 2 * int(summary.called_pocket_hits)
+		summary.cash_delta += called_cash
+		summary.breakdown.append("Called Tab: +$" + str(called_cash))
+
+	if relic_ids.has(&"bumper_policy") and summary.tags.has(&"CLUSTER_BREAK"):
 		summary.final_score += 140
+		summary.cash_delta += 1
+		summary.breakdown.append("Bumper Policy: +140, +$1")
+
+	if relic_ids.has(&"quiet_hands") and summary.tags.has(&"SOFT_TOUCH"):
 		summary.style_delta += 1
-		summary.breakdown.append("Chapel Candle: +140, +1 Style")
+		summary.breakdown.append("Quiet Hands: +1 Style")
 
-	if relic_ids.has(&"rain_check") and summary.tags.has(&"LONG_POT"):
-		if summary.tags.has(&"BANK"):
-			summary.final_score += 240
-			summary.cash_delta += 4
-			summary.breakdown.append("Rain Check long bank: +240, +$4")
-		else:
-			summary.cash_delta += 2
-			summary.breakdown.append("Rain Check long pot: +$2")
-
-	if relic_ids.has(&"mirror_hex") and summary.scratch and summary.has_successful_pot():
-		summary.health_delta += 1
-		summary.final_score += 160
-		summary.breakdown.append("Mirror Hex forgave scoring scratch: +160")
-
-func apply_on_table_complete(summary, relic_ids: Array[StringName], shots_remaining: int, run_style: int) -> Dictionary:
+func apply_on_table_complete(summary, relic_ids: Array[StringName], balls_left: int, run_style: int) -> Dictionary:
 	var result := {"score": 0, "cash": 0, "style": 0, "notes": []}
 	var notes: Array[String] = []
-	if relic_ids.has(&"high_roller_chip") and shots_remaining >= 2:
-		result["score"] = int(result["score"]) + 250
-		result["cash"] = int(result["cash"]) + 6
-		notes.append("High Roller Chip: +250, +$6")
-	if relic_ids.has(&"tip_jar") and run_style > 0:
-		result["cash"] = int(result["cash"]) + run_style
-		notes.append("Tip Jar: +$" + str(run_style))
+	if relic_ids.has(&"spare_ball") and balls_left >= 3:
+		result["health"] = 1
+		notes.append("Spare Ball: +1 ball")
 	result["notes"] = notes
 	return result
 
 func apply_on_table_fail(relic_ids: Array[StringName]) -> Dictionary:
 	var result := {"health": 0, "notes": []}
-	var notes: Array[String] = []
-	if relic_ids.has(&"high_roller_chip"):
-		result["health"] = int(result["health"]) - 1
-		notes.append("High Roller Chip marker called: -1 reputation")
-	result["notes"] = notes
+	result["notes"] = []
 	return result
 
 func get_display_name(id: StringName) -> String:
