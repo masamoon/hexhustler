@@ -30,7 +30,6 @@ var final_score: int = 0
 var cash_delta: int = 0
 var style_delta: int = 0
 var health_delta: int = 0
-var curse_damage: int = 0
 var breakdown: Array[String] = []
 
 func has_successful_pot() -> bool:

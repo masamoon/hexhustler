@@ -2,15 +2,15 @@ class_name ScoringEngine
 extends RefCounted
 
 func travel_score_for_distance(distance: float) -> int:
-	return clampi(int(round((distance - 110.0) * 0.34)), 0, 300)
+	return maxi(0, int(round((distance - 110.0) * 0.34)))
 
 func score(summary, table_def: Dictionary, potted_records: Array[Dictionary], has_witchwood: bool) -> void:
 	var score_total := 0
 	var cash_total := 0
 	var jackpot_pocket: StringName = table_def.get("jackpot_pocket", &"")
-	var cursed_pocket: StringName = table_def.get("cursed_pocket", &"")
+	var risk_pocket: StringName = table_def.get("risk_pocket", table_def.get("cursed_pocket", &""))
 	var modifier: StringName = table_def.get("modifier", &"")
-	var cursed_pocket_hit := false
+	var risk_pocket_hit := false
 
 	for record in potted_records:
 		var kind: StringName = record.get("kind", &"normal")
@@ -23,18 +23,19 @@ func score(summary, table_def: Dictionary, potted_records: Array[Dictionary], ha
 			summary.travel_score_total += travel_score
 			summary.breakdown.append("Travel run: +" + str(travel_score))
 
-		if kind == &"cursed":
-			ball_score += 80
-			summary.breakdown.append("Cursed ball: +80")
+		if _is_risk_kind(kind):
+			ball_score += 120
+			ball_cash += 1
+			summary.breakdown.append("Risk ball cashed: +120, +$1")
 
 		if pocket_id == jackpot_pocket:
 			ball_score *= 3
 			ball_cash += 3
 			summary.breakdown.append("Jackpot pocket x3")
-		if cursed_pocket != &"" and pocket_id == cursed_pocket and not cursed_pocket_hit:
-			cursed_pocket_hit = true
+		if risk_pocket != &"" and pocket_id == risk_pocket and not risk_pocket_hit:
+			risk_pocket_hit = true
 			ball_score = max(0, ball_score - 60)
-			summary.breakdown.append("Cursed pocket: -60")
+			summary.breakdown.append("Risk pocket tax: -60")
 
 		if modifier == &"bank_bonus":
 			if summary.tags.has(&"BANK"):
@@ -106,3 +107,6 @@ func score(summary, table_def: Dictionary, potted_records: Array[Dictionary], ha
 	summary.base_score = score_total
 	summary.final_score = score_total
 	summary.cash_delta += cash_total
+
+func _is_risk_kind(kind: StringName) -> bool:
+	return kind == &"risk" or kind == &"cursed"

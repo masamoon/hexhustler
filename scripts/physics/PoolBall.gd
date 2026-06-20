@@ -105,10 +105,10 @@ func _draw() -> void:
 		&"gold":
 			draw_circle(Vector2.ZERO, radius * 0.45, Color(1.0, 0.86, 0.20, 0.95))
 			_draw_glyph("$", Color(0.12, 0.07, 0.0, 0.96), 0.82)
-		&"cursed":
-			draw_line(Vector2(-radius * 0.45, 0), Vector2(radius * 0.45, 0), Color(0.1, 0.0, 0.16), 3.0)
-			draw_line(Vector2(0, -radius * 0.45), Vector2(0, radius * 0.45), Color(0.1, 0.0, 0.16), 3.0)
-			_draw_glyph("X", Color(1.0, 0.82, 1.0, 0.95), 0.72)
+		&"risk", &"cursed":
+			draw_circle(Vector2.ZERO, radius * 0.48, Color(1.0, 0.76, 0.18, 0.92))
+			draw_arc(Vector2.ZERO, radius * 0.68, 0.0, TAU, 32, Color(0.10, 0.0, 0.03, 0.82), 2.5)
+			_draw_glyph("!", Color(0.12, 0.0, 0.02, 0.96), 0.92)
 		&"bomb":
 			draw_circle(Vector2.ZERO, radius * 0.38, Color(1.0, 0.25, 0.12, 0.95))
 			_draw_glyph("B", Color(0.08, 0.0, 0.0, 0.95), 0.70)
