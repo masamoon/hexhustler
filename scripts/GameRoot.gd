@@ -13,6 +13,9 @@ const RelicEngine = preload("res://scripts/table/RelicEngine.gd")
 const UI_SPRITE_ATLAS = preload("res://assets/ui/occult_ui_sprites.png")
 const TABLE_SPRITE_ATLAS = preload("res://assets/ui/occult_table_sprites.png")
 const BALL_CUE_SPRITE_ATLAS = preload("res://assets/ui/occult_ball_cue_sprites.png")
+const MENU_BACKROOM_KEYART = preload("res://assets/ui/menu_backroom_keyart.png")
+const PROP_SPRITE_ATLAS = preload("res://assets/ui/occult_prop_sprites.png")
+const STORE_SPRITE_ATLAS = preload("res://assets/ui/occult_store_sprites.png")
 
 enum State {
 	MAIN_MENU,
@@ -54,17 +57,16 @@ const EVERY_SHOT_POT_PER_SHOT_SCORE := 80
 const DEBT_REP_STEP := 18
 const POCKET_CORNER_GAP := 76.0
 const POCKET_SIDE_GAP := 132.0
-const POCKET_SENSOR_RADIUS := 42.0
-const POCKET_CAPTURE_RADIUS := 36.0
+const POCKET_SENSOR_RADIUS := 31.0
+const POCKET_VISUAL_RADIUS := 42.0
+const POCKET_CAPTURE_RADIUS := 29.0
 const POCKET_CUP_DEPTH := 13.0
 const POCKET_MOUTH_DEPTH := 78.0
-const POCKET_LIP_SOFT_ZONE := 24.0
-const POCKET_FUNNEL_ACCEL := 245.0
 const OUT_OF_BOUNDS_MARGIN := 30.0
 const TABLE_BACKSTOP_THICKNESS := 28.0
-const POCKET_THROAT_RADIUS := 72.0
+const POCKET_THROAT_RADIUS := 58.0
 const POCKET_ESCAPE_DEPTH := 18.0
-const CORNER_MOUTH_RETURN_RADIUS := 82.0
+const CORNER_MOUTH_GUARD_RADIUS := 82.0
 const SPAWN_CLEARANCE := 48.0
 const SPIN_STEP := 0.25
 const MAX_SPIN := 1.0
@@ -81,10 +83,11 @@ const CLEARED_TABLE_FAST_RESOLVE_DELAY := 0.62
 const LIVE_TRAVEL_HISTORY_POINTS := 96
 const TABLE_INTRO_TIMED_SECONDS := 6.5
 const TABLE_INTRO_MANUAL_SECONDS := 9999.0
+const SHOP_OFFER_COUNT := 3
+const SHOP_REROLL_BASE_COST := 3
 const LUCIEN_DARE_CHANCE := 0.18
 const LUCIEN_DARE_FIRST_SHOT_MIN := 2
 const LUCIEN_DARE_SHOT_GAP := 3
-const LUCIEN_DARE_WARNING_LIMIT := 2
 const THEME_VOID := Color(0.012, 0.008, 0.018, 0.98)
 const THEME_PANEL := Color(0.030, 0.016, 0.044, 0.96)
 const THEME_GOLD := Color(1.0, 0.78, 0.24, 0.96)
@@ -127,8 +130,6 @@ const TABLE_SPRITE_REGIONS: Dictionary = {
 	&"rail_wide": Rect2(24, 214, 880, 76),
 	&"rail_thin": Rect2(20, 318, 890, 58),
 	&"table_plaque": Rect2(988, 236, 248, 110),
-	&"lucien_portrait": Rect2(1250, 220, 235, 190),
-	&"lucien_eyes": Rect2(1240, 430, 260, 90),
 	&"modal_parchment": Rect2(24, 384, 480, 245),
 	&"modal_felt": Rect2(525, 382, 438, 250),
 	&"modal_blood": Rect2(998, 425, 270, 160),
@@ -137,8 +138,9 @@ const TABLE_SPRITE_REGIONS: Dictionary = {
 	&"ball_risk": Rect2(302, 660, 118, 118),
 	&"ball_bomb": Rect2(444, 660, 120, 120),
 	&"ball_boss": Rect2(566, 642, 150, 144),
-	&"cue_stick": Rect2(716, 700, 520, 58),
+	&"cue_stick": Rect2(720, 739, 516, 19),
 	&"tile_rail": Rect2(24, 800, 176, 160),
+	&"tile_felt": Rect2(620, 455, 245, 110),
 	&"tile_sticky": Rect2(214, 800, 176, 160),
 	&"tile_ice": Rect2(660, 800, 170, 150),
 	&"chalk_cube": Rect2(884, 785, 78, 78),
@@ -148,8 +150,26 @@ const TABLE_SPRITE_REGIONS: Dictionary = {
 	&"separator_star": Rect2(840, 910, 96, 70),
 	&"separator_skull": Rect2(1100, 900, 96, 80)
 }
-const CUE_SPRITE_REGION := Rect2(0, 128, 320, 64)
-
+const PROP_SPRITE_REGIONS: Dictionary = {
+	&"lucien_standing": Rect2(0, 0, 256, 256),
+	&"bumper_idol": Rect2(256, 0, 256, 256),
+	&"risk_sigil": Rect2(512, 0, 256, 256),
+	&"chalk_mark": Rect2(768, 0, 256, 256),
+	&"rain_window": Rect2(0, 256, 256, 256),
+	&"mirror_frame": Rect2(256, 256, 256, 256),
+	&"bookie_slips": Rect2(512, 256, 256, 256),
+	&"broken_cues": Rect2(768, 256, 256, 256),
+	&"tar_puddle": Rect2(0, 512, 256, 256),
+	&"floor_sigil": Rect2(256, 512, 256, 256),
+	&"ledger_board": Rect2(512, 512, 256, 256),
+	&"call_token": Rect2(768, 512, 256, 256)
+}
+const STORE_SPRITE_REGIONS: Dictionary = {
+	&"shop_counter": Rect2(0, 0, 256, 256),
+	&"offer_card": Rect2(256, 0, 256, 256),
+	&"reroll_token": Rect2(512, 0, 256, 256),
+	&"sold_seal": Rect2(768, 0, 256, 256)
+}
 const META_UPGRADES: Dictionary = {
 	"preview": {
 		"name": "Veil Sight",
@@ -185,6 +205,13 @@ var run_cue_spin_bonus := 0.0
 var run_contract_score_ease := 0.0
 var run_contract_extra_shots := 0
 var run_contract_gold_skim := 0
+var run_shop_called_bounty := 0
+var run_shop_rail_debt := 0
+var run_shop_perfect_tithe := 0
+var run_shop_cluster_tithe := 0
+var run_shop_dare_lure := 0
+var run_shop_anchor_tax := 0
+var run_shop_black_abacus := 0
 var run_curse_ward := 0
 var run_table_limit := 0
 var run_contract_name := "Full Route"
@@ -210,8 +237,10 @@ var called_pocket_id: StringName = &""
 var current_shot_called_pocket_id: StringName = &""
 var calling_pocket_mode := false
 var boss_health := 0
+var boss_special_hits := 0
 var boss_vulnerable := false
 var boss_potted := false
+var glass_break_failed := false
 var firecracker_used := false
 var gold_potted_this_table := 0
 var potted_count_this_table := 0
@@ -225,8 +254,9 @@ var rival_name := ""
 var rival_title := ""
 var rival_intent: StringName = &""
 var rival_composure := 0
-var rival_pressure := 0
 var lucien_dare_active := false
+var lucien_dare_offer_pending := false
+var lucien_dare_doubled := false
 var lucien_dare_flash_text := ""
 var lucien_dare_flash_seconds := 0.0
 var table_dares_called := 0
@@ -312,6 +342,7 @@ var reward_title: Label
 var reward_summary_scroll: ScrollContainer
 var reward_summary_label: Label
 var reward_buttons: Array[Button] = []
+var shop_reroll_button: Button
 var continue_button: Button
 var reward_choice_locked := false
 var ball_tooltip: PanelContainer
@@ -363,7 +394,8 @@ var browser_pocket_test_ball = null
 var browser_pocket_test_started_at := 0.0
 var browser_pocket_test_min_distance := INF
 var browser_pocket_test_lip_deflections := 0
-var browser_pocket_test_returns := 0
+var browser_pocket_test_tunnel_rescues := 0
+var browser_pocket_test_total_tunnel_rescues := 0
 var browser_aim_test_enabled := false
 var browser_aim_test_active := false
 var browser_aim_test_queue: Array[Dictionary] = []
@@ -382,7 +414,11 @@ var browser_run_test_shops_seen := 0
 var browser_run_test_target_shops := 4
 var browser_run_test_bonus_seen := false
 var shop_purchased_ids: Dictionary = {}
-var menu_panel: PanelContainer
+var current_shop_offers: Array[Dictionary] = []
+var shop_rerolls_this_table := 0
+var menu_art_background: TextureRect
+var menu_panel: Control
+var menu_left_frame: PanelContainer
 var menu_scroll: ScrollContainer
 var menu_root: VBoxContainer
 var menu_cue_list: VBoxContainer
@@ -414,6 +450,12 @@ var table_intro_body: Label
 var table_intro_footer: Label
 var table_intro_seconds := 0.0
 var table_intro_manual := false
+var lucien_dare_offer_panel: PanelContainer
+var lucien_dare_offer_title: Label
+var lucien_dare_offer_body: Label
+var lucien_dare_offer_stakes: Label
+var lucien_dare_accept_button: Button
+var lucien_dare_raise_button: Button
 var shot_receipt_panel: PanelContainer
 var shot_receipt_title: Label
 var shot_receipt_body: Label
@@ -442,7 +484,7 @@ const CUE_DEFS: Dictionary = {
 	},
 	&"rail_baron": {
 		"name": "Rail Baron",
-		"text": "Bank pots score higher, direct pots pay less.",
+		"text": "Pots after a cushion bounce earn more Reputation; straight-in pots pay less.",
 		"unlock": "Clear The Long Way",
 		"max_power": 0.94,
 		"min_power": 0.9,
@@ -468,7 +510,7 @@ const CUE_DEFS: Dictionary = {
 	},
 	&"dead_eye_cue": {
 		"name": "Dead-Eye Cue",
-		"text": "Longer aim preview and extra perfect-pot score.",
+		"text": "Longer aim preview and extra Reputation when a ball enters near pocket center.",
 		"unlock": "Clear Gold Rush",
 		"max_power": 0.92,
 		"min_power": 0.78,
@@ -479,9 +521,24 @@ const CUE_DEFS: Dictionary = {
 		"glow": Color(0.78, 1.0, 0.86),
 		"width": 6.0
 	},
+	&"seers_fork": {
+		"name": "Seer's Fork",
+		"text": "Shows a brighter cue-ball rebound path after first contact and extra ball-bump reads.",
+		"unlock": "Clear Banker's Wake",
+		"max_power": 0.90,
+		"min_power": 0.74,
+		"aim": 1.30,
+		"contact_reads": 2,
+		"rebound_scale": 1.7,
+		"shaft": Color(0.54, 0.94, 1.0),
+		"wrap": Color(0.035, 0.055, 0.10),
+		"tip": Color(0.88, 1.0, 1.0),
+		"glow": Color(0.44, 0.88, 1.0),
+		"width": 6.0
+	},
 	&"bookies_hook": {
 		"name": "Bookie's Hook",
-		"text": "Called pockets and hot-pocket routes pay cash.",
+		"text": "Called-pocket dare pots and hot-pocket routes pay Bankroll.",
 		"unlock": "Clear Table Challenge Alley",
 		"max_power": 0.96,
 		"min_power": 0.82,
@@ -494,7 +551,7 @@ const CUE_DEFS: Dictionary = {
 	},
 	&"chapel_bridge": {
 		"name": "Chapel Bridge",
-		"text": "Caroms, kisses, and gentle routes earn style.",
+		"text": "Cue-ball two-touches, object-ball nudges, and gentle routes earn style.",
 		"unlock": "Clear Carom Chapel",
 		"max_power": 0.90,
 		"min_power": 0.70,
@@ -504,6 +561,20 @@ const CUE_DEFS: Dictionary = {
 		"tip": Color(0.92, 0.86, 1.0),
 		"glow": Color(0.72, 0.56, 1.0),
 		"width": 6.0
+	},
+	&"free_hand": {
+		"name": "Free Hand",
+		"text": "After a scratch, the cue ball returns near your mouse at the nearest safe spot.",
+		"unlock": "Clear Scratch Parlor",
+		"max_power": 0.98,
+		"min_power": 0.72,
+		"aim": 1.12,
+		"scratch_place": true,
+		"shaft": Color(1.0, 0.88, 0.52),
+		"wrap": Color(0.11, 0.055, 0.018),
+		"tip": Color(0.98, 1.0, 0.80),
+		"glow": Color(1.0, 0.82, 0.28),
+		"width": 7.0
 	},
 	&"eight_cane": {
 		"name": "Eight Cane",
@@ -611,6 +682,36 @@ const BOARD_DEFS: Dictionary = {
 		"pocket_capture": 0.98,
 		"pocket_sensor": 1.0
 	},
+		&"frost_crypt": {
+			"name": "Frost Crypt",
+			"text": "Cold occult cloth. Fast lanes, hard glints, and tighter mistakes.",
+		"unlock": "Reach the cold biome",
+		"felt": Color(0.020, 0.090, 0.135),
+		"accent": Color(0.48, 0.95, 1.0),
+		"rail": Color(0.018, 0.040, 0.075),
+		"outer": Color(0.006, 0.014, 0.028),
+		"damp": 0.94,
+		"rail_bounce": 0.52,
+		"rail_friction": 0.11,
+		"jaw_bounce": 0.34,
+		"pocket_capture": 0.94,
+		"pocket_sensor": 0.96
+	},
+		&"hell_black": {
+			"name": "Black Hell",
+			"text": "Black felt and infernal rails. Smaller mouths turn every pot into a bargain.",
+		"unlock": "Reach the hell biome",
+		"felt": Color(0.010, 0.008, 0.009),
+		"accent": Color(1.0, 0.22, 0.08),
+		"rail": Color(0.070, 0.010, 0.006),
+		"outer": Color(0.004, 0.002, 0.002),
+		"damp": 1.0,
+		"rail_bounce": 0.50,
+		"rail_friction": 0.16,
+		"jaw_bounce": 0.28,
+		"pocket_capture": 0.90,
+		"pocket_sensor": 0.92
+	},
 		&"house_vault": {
 			"name": "House Vault",
 			"text": "Prestige cloth. Slightly heavier, cleaner scoring reads. Precision pays.",
@@ -689,11 +790,11 @@ var tables: Array[Dictionary] = [
 		"biome": "House table",
 		"reward_tier": 1,
 		"objective": &"clear_rack",
-		"objective_text": "Clear every object ball. Score is a bonus.",
+		"objective_text": "Clear every object ball. Reputation is a mastery bonus.",
 		"target_score": 650,
 		"shot_limit": 5,
 		"modifier": &"classic",
-		"modifier_text": "No gimmicks yet; bank, call, and pot cleanly.",
+		"modifier_text": "No gimmicks yet; use cushions, dare calls, and clean pots.",
 		"felt": Color(0.03, 0.19, 0.14),
 		"accent": Color(0.78, 0.92, 0.78),
 		"balls": [
@@ -732,11 +833,11 @@ var tables: Array[Dictionary] = [
 		"biome": "Velvet rail room",
 		"reward_tier": 1,
 		"objective": &"clear_rack",
-		"objective_text": "Clear every object ball. Bank shots pay big.",
+		"objective_text": "Clear every object ball. Pots after cushion bounces pay big.",
 		"required_pots": 5,
 		"shot_limit": 7,
 		"modifier": &"bank_bonus",
-		"modifier_text": "Fast rain-glass lane rewards rails but can overrun soft routes.",
+		"modifier_text": "Fast rain-glass lane rewards cushion routes but can overrun gentle shots.",
 		"zones": [
 			{"id": &"rail_glass_lane", "kind": &"ice", "rect": Rect2(545, 286, 536, 84), "strength": 1.018}
 		],
@@ -757,10 +858,10 @@ var tables: Array[Dictionary] = [
 		"biome": "Splintered side hall",
 		"reward_tier": 2,
 		"objective": &"clear_rack",
-		"objective_text": "Clear the rack. Hard impacts score.",
+		"objective_text": "Clear the rack. Hard impacts earn Reputation.",
 		"shot_limit": 7,
 		"modifier": &"collision_bonus",
-		"modifier_text": "Bumpers kick balls back with bonus impact chaos.",
+		"modifier_text": "Bumpers throw balls back with bonus impact chaos.",
 		"bumpers": [
 			{"id": &"bar_left", "pos": Vector2(612, 330), "radius": 26.0},
 			{"id": &"bar_right", "pos": Vector2(930, 486), "radius": 26.0}
@@ -809,12 +910,12 @@ var tables: Array[Dictionary] = [
 		"biome": "A narrow bookie's table",
 		"reward_tier": 1,
 		"objective": &"clear_rack",
-		"objective_text": "Clear every object ball. The side pocket pays loud.",
+		"objective_text": "Clear every object ball. The bookie's layout changes each visit.",
 		"target_score": 1150,
 		"shot_limit": 6,
 		"modifier": &"jackpot",
 		"jackpot_pocket": &"S",
-		"modifier_text": "The center south pocket is hot; called routes earn respect.",
+		"modifier_text": "A random pocket runs hot; the room furniture shifts between visits.",
 		"bumpers": [
 			{"id": &"bookie_post", "pos": Vector2(808, 410), "radius": 22.0}
 		],
@@ -834,11 +935,11 @@ var tables: Array[Dictionary] = [
 		"biome": "Candlelit carom chapel",
 		"reward_tier": 1,
 		"objective": &"clear_rack",
-		"objective_text": "Clear every object ball. Kiss routes keep the chapel lit.",
+		"objective_text": "Clear every object ball. Object-ball nudge routes keep the chapel lit.",
 		"required_pots": 6,
 		"shot_limit": 8,
 		"modifier": &"collision_bonus",
-		"modifier_text": "Dense traffic rewards caroms, kisses, and controlled bumps.",
+		"modifier_text": "Dense traffic rewards cue-ball two-touches, object-ball nudges, and controlled bumps.",
 		"bumpers": [
 			{"id": &"chapel_bell", "pos": Vector2(872, 408), "radius": 20.0}
 		],
@@ -859,7 +960,7 @@ var tables: Array[Dictionary] = [
 		"biome": "Chalk-marked trial table",
 		"reward_tier": 1,
 		"objective": &"clear_rack",
-		"objective_text": "Clear every object ball. BANK and CAROM are bonus tags.",
+		"objective_text": "Clear every object ball. Bonus tags: cushion-bounce pot and cue-ball two-touch.",
 		"required_tags": [&"BANK", &"CAROM"],
 		"shot_limit": 7,
 		"modifier": &"tag_trial",
@@ -883,10 +984,10 @@ var tables: Array[Dictionary] = [
 		"biome": "Rain-glass banker's room",
 		"reward_tier": 1,
 		"objective": &"clear_rack",
-		"objective_text": "Clear the rack. Rails are the cleanest alibi.",
+		"objective_text": "Clear the rack. Cushion-bounce pots are the cleanest alibi.",
 		"shot_limit": 8,
 		"modifier": &"bank_bonus",
-		"modifier_text": "Direct pots are taxed; banked pots keep the ledger warm.",
+		"modifier_text": "Straight-in pots are taxed; cushion-bounce pots keep the ledger warm.",
 		"zones": [
 			{"id": &"rain_left", "kind": &"ice", "rect": Rect2(536, 292, 190, 224), "strength": 1.018},
 			{"id": &"rain_right", "kind": &"ice", "rect": Rect2(890, 292, 166, 224), "strength": 1.016}
@@ -960,10 +1061,10 @@ var tables: Array[Dictionary] = [
 		"biome": "The locked midnight table",
 		"reward_tier": 3,
 		"objective": &"boss",
-		"objective_text": "Break Lucien's shield, damage the Anchor Eight, then call and pot it.",
+		"objective_text": "Break Lucien's shield, damage the Anchor Eight, then pot it.",
 		"shot_limit": 9,
 		"boss_health": 520,
-		"boss_requires_called_pocket": true,
+		"boss_requires_called_pocket": false,
 		"modifier": &"boss",
 		"modifier_text": "Lucien's soul-anchor rides the slick midnight cloth. The north-east mouth is high-risk.",
 		"zones": [
@@ -987,6 +1088,7 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	reward_rng.randomize()
 	fx_rng.randomize()
+	tables = _build_generated_run_tables()
 	next_run_seed = _new_run_seed()
 	_load_progress()
 	_build_world()
@@ -997,6 +1099,8 @@ func _ready() -> void:
 	call_deferred("_maybe_start_browser_pocket_test")
 	call_deferred("_maybe_start_browser_aim_test")
 	call_deferred("_maybe_start_browser_run_test")
+	call_deferred("_maybe_start_browser_art_table")
+	call_deferred("_maybe_start_browser_receipt_test")
 
 func _maybe_start_browser_pocket_test() -> void:
 	if not _web_query_has_flag("pocket_test") and not _web_query_has_flag("pocket_sweep"):
@@ -1008,6 +1112,7 @@ func _maybe_start_browser_pocket_test() -> void:
 	_start_run(true, 1)
 	browser_pocket_test_queue = _browser_pocket_sweep_cases() if sweep else _browser_pocket_test_cases()
 	browser_pocket_test_results.clear()
+	browser_pocket_test_total_tunnel_rescues = 0
 	_browser_pocket_test_log("POCKET_TEST_QUEUE " + str(browser_pocket_test_queue.size()))
 	call_deferred("_start_next_browser_pocket_test")
 
@@ -1020,12 +1125,79 @@ func _web_query_has_flag(flag: String) -> bool:
 	fragment = str(JavaScriptBridge.eval("window.location.hash || ''", true))
 	return query.contains(flag) or fragment.contains(flag)
 
+func _web_query_value(key: String) -> String:
+	if OS.get_name() != "Web":
+		return ""
+	var script := "new URLSearchParams(window.location.search || '').get(" + JSON.stringify(key) + ") || ''"
+	return str(JavaScriptBridge.eval(script, true))
+
+func _maybe_start_browser_art_table() -> void:
+	if browser_pocket_test_enabled or browser_aim_test_enabled or browser_run_test_enabled:
+		return
+	var raw := _web_query_value("art_table")
+	if raw == "":
+		return
+	var table_to_open := -1
+	if raw.is_valid_int():
+		table_to_open = clampi(int(raw), 0, maxi(0, tables.size() - 1))
+	else:
+		var wanted := StringName(raw)
+		for i in range(tables.size()):
+			if StringName(tables[i].get("id", &"")) == wanted:
+				table_to_open = i
+				break
+	if table_to_open < 0:
+		return
+	furthest_table_reached = maxi(furthest_table_reached, table_to_open)
+	selected_practice_table = table_to_open
+	print("Art table QA: ", raw, " -> ", table_to_open)
+	_start_run(true, 1)
+
+func _maybe_start_browser_receipt_test() -> void:
+	if browser_pocket_test_enabled or browser_aim_test_enabled or browser_run_test_enabled:
+		return
+	if not _web_query_has_flag("receipt_test"):
+		return
+	selected_practice_table = 0
+	_start_run(true, 1)
+	if table_intro_panel != null:
+		table_intro_panel.visible = false
+		table_intro_seconds = 0.0
+		table_intro_manual = false
+	var summary := ShotSummary.new()
+	summary.shot_id = 1
+	summary.final_score = 360
+	summary.cash_delta = 3
+	summary.style_delta = 1
+	summary.tags = [&"POT", &"LONG_POT", &"PERFECT_POT"]
+	summary.breakdown.append("Center entry: +120 Rep")
+	summary.breakdown.append("Long travel: +160 Rep")
+	summary.breakdown.append("Bookie Slate called line: +90 Rep, +$1 Bankroll")
+	_show_shot_receipt(summary)
+	_push_score_side_feed("Travel +120", Color(0.72, 1.0, 0.56), 1.0)
+	_push_score_side_feed("Center +90", Color(1.0, 0.84, 0.34), 1.0)
+	print("RECEIPT_TEST_READY")
+
 func _browser_pocket_test_log(message: String) -> void:
 	print(message)
 	if OS.get_name() != "Web":
 		return
 	var js_message := JSON.stringify(message)
-	JavaScriptBridge.eval("window.__hexPocketTestLog = window.__hexPocketTestLog || []; window.__hexPocketTestLog.push(" + js_message + "); document.title = " + JSON.stringify("HexHustler " + message.left(48)) + ";", true)
+	JavaScriptBridge.eval("console.log(" + js_message + "); window.__hexPocketTestLog = window.__hexPocketTestLog || []; window.__hexPocketTestLog.push(" + js_message + "); document.title = " + JSON.stringify("HexHustler " + message.left(220)) + ";", true)
+
+func _finish_browser_pocket_test() -> void:
+	var failure_count := 0
+	var failure_details: Array[String] = []
+	for result in browser_pocket_test_results:
+		if String(result).contains(":FAIL"):
+			failure_count += 1
+			failure_details.append(String(result))
+	var summary := "POCKET_TEST_DONE cases=" + str(browser_pocket_test_results.size()) + " failures=" + str(failure_count) + " tunnel_rescues=" + str(browser_pocket_test_total_tunnel_rescues)
+	var detail := " | " + " | ".join(browser_pocket_test_results)
+	if not failure_details.is_empty():
+		detail = " fail=" + " ; ".join(failure_details.slice(0, 8)) + detail
+	_browser_pocket_test_log(summary + detail)
+	state = State.AIMING
 
 func _browser_pocket_test_cases() -> Array[Dictionary]:
 	return [
@@ -1077,15 +1249,14 @@ func _browser_pocket_sweep_cases() -> Array[Dictionary]:
 			for lateral_frac in lateral_fracs:
 				for drift_frac in drift_fracs:
 					cases.append({
-						"name": "SWEEP " + String(pocket_id) + " v" + str(int(speed)) + " l" + str(snappedf(lateral_frac, 0.01)) + " a" + str(snappedf(drift_frac, 0.01)),
-						"pocket": pocket_id,
-						"lane": &"sweep_clear",
-						"speed": speed,
-						"lateral_frac": lateral_frac,
-						"drift_frac": drift_frac,
-						"clean": true,
-						"timeout": 1.15
-					})
+							"name": "SWEEP " + String(pocket_id) + " v" + str(int(speed)) + " l" + str(snappedf(lateral_frac, 0.01)) + " a" + str(snappedf(drift_frac, 0.01)),
+							"pocket": pocket_id,
+							"lane": &"sweep_clear",
+							"speed": speed,
+							"lateral_frac": lateral_frac,
+							"drift_frac": drift_frac,
+							"timeout": 1.15
+						})
 	return cases
 
 func _start_next_browser_pocket_test() -> void:
@@ -1097,12 +1268,10 @@ func _start_next_browser_pocket_test() -> void:
 			failure_count += 1
 	if _web_query_has_flag("pocket_sweep") and failure_count >= 40:
 		_browser_pocket_test_log("POCKET_TEST_ABORT failures=" + str(failure_count))
-		_browser_pocket_test_log("POCKET_TEST_DONE " + " | ".join(browser_pocket_test_results))
-		state = State.AIMING
+		_finish_browser_pocket_test()
 		return
 	if browser_pocket_test_queue.is_empty():
-		_browser_pocket_test_log("POCKET_TEST_DONE " + " | ".join(browser_pocket_test_results))
-		state = State.AIMING
+		_finish_browser_pocket_test()
 		return
 	if _web_query_has_flag("pocket_sweep") and browser_pocket_test_results.size() > 0 and browser_pocket_test_results.size() % 100 == 0:
 		_browser_pocket_test_log("POCKET_TEST_PROGRESS " + str(browser_pocket_test_results.size()) + " failures=" + str(failure_count))
@@ -1165,7 +1334,7 @@ func _prepare_browser_pocket_test_shot(pocket, lane: StringName, speed: float = 
 	browser_pocket_test_started_at = 0.0
 	browser_pocket_test_min_distance = INF
 	browser_pocket_test_lip_deflections = 0
-	browser_pocket_test_returns = 0
+	browser_pocket_test_tunnel_rescues = 0
 	_browser_pocket_test_log("POCKET_TEST_CASE " + String(browser_pocket_test_case.get("name", "?")) + " start=" + str(start.round()) + " speed=" + str(int(round(velocity.length()))))
 
 func _clear_balls_for_browser_pocket_test() -> void:
@@ -1406,12 +1575,12 @@ func _update_browser_pocket_test(delta: float) -> void:
 	if browser_pocket_test_ball.potted:
 		var result := "PASS" if expected_pot else "FAIL sucked"
 		var rail_hits := current_log.count_type(GameplayEvent.Type.RAIL_HIT) if current_log != null else 0
-		if expected_pot and browser_pocket_test_returns > 0:
-			result = "FAIL returned"
+		if expected_pot and browser_pocket_test_tunnel_rescues > 0:
+			result = "FAIL tunnel rescue"
 		elif expected_pot and bool(browser_pocket_test_case.get("clean", false)) and (browser_pocket_test_lip_deflections > 0 or rail_hits > 0):
 			result = "FAIL bounced"
 		browser_pocket_test_results.append(case_name + ":" + result)
-		_browser_pocket_test_log("POCKET_TEST_" + result.replace(" ", "_") + " " + case_name + " deflections=" + str(browser_pocket_test_lip_deflections) + " rails=" + str(rail_hits) + " returns=" + str(browser_pocket_test_returns))
+		_browser_pocket_test_log("POCKET_TEST_" + result.replace(" ", "_") + " " + case_name + " deflections=" + str(browser_pocket_test_lip_deflections) + " rails=" + str(rail_hits) + " tunnel_rescues=" + str(browser_pocket_test_tunnel_rescues))
 		browser_pocket_test_active = false
 		call_deferred("_start_next_browser_pocket_test")
 		return
@@ -1421,8 +1590,8 @@ func _update_browser_pocket_test(delta: float) -> void:
 		var vel: Vector2 = browser_pocket_test_ball.linear_velocity
 		var recent := _recent_event_lines(8).replace("\n", " / ")
 		if expected_pot:
-			browser_pocket_test_results.append(case_name + ":FAIL pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " returns=" + str(browser_pocket_test_returns))
-			_browser_pocket_test_log("POCKET_TEST_FAIL " + case_name + " pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " returns=" + str(browser_pocket_test_returns) + " recent=" + recent)
+			browser_pocket_test_results.append(case_name + ":FAIL pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " tunnel_rescues=" + str(browser_pocket_test_tunnel_rescues))
+			_browser_pocket_test_log("POCKET_TEST_FAIL " + case_name + " pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " tunnel_rescues=" + str(browser_pocket_test_tunnel_rescues) + " recent=" + recent)
 		else:
 			browser_pocket_test_results.append(case_name + ":PASS miss")
 			_browser_pocket_test_log("POCKET_TEST_PASS_MISS " + case_name + " pos=" + str(pos.round()) + " min=" + str(int(round(browser_pocket_test_min_distance))))
@@ -1593,6 +1762,7 @@ func _build_ui() -> void:
 	_build_main_menu()
 	_build_pause_panel()
 	_build_table_intro_panel()
+	_build_lucien_dare_offer_panel()
 	_build_shot_receipt_panel()
 
 	_build_reward_panel()
@@ -1707,7 +1877,6 @@ func _complete_last_ball_drama(pos: Vector2) -> void:
 	last_ball_drama_pocket_pos = pos
 	_spawn_pulse(pos, Color(1.0, 0.92, 0.22), 42, 230)
 	_spawn_pulse(pos, Color(0.36, 1.0, 0.86), 24, 148)
-	_show_float("FINAL DROP", pos + Vector2(0, -150), Color(1.0, 0.92, 0.32), 34)
 	_play_audio_cue(&"clear", 1.0)
 	_play_last_ball_crescendo(1.0)
 	shake_amount = maxf(shake_amount, 10.0)
@@ -1803,18 +1972,28 @@ func _layout_hud(viewport_size: Vector2) -> void:
 		_set_control_rect(relic_panel, Vector2(viewport_size.x - relic_width - VIEWPORT_MARGIN, 12), Vector2(relic_width, 94))
 		relic_panel.visible = false
 	if chalk_panel != null:
-		chalk_panel.visible = false
+		var chalk_width := minf(328.0, maxf(260.0, viewport_size.x - VIEWPORT_MARGIN * 2.0))
+		var chalk_height := 154.0
+		_set_control_rect(
+			chalk_panel,
+			Vector2(viewport_size.x - chalk_width - VIEWPORT_MARGIN, viewport_size.y - chalk_height - VIEWPORT_MARGIN),
+			Vector2(chalk_width, chalk_height)
+		)
+		chalk_panel.visible = _should_show_chalk_panel()
 
 func _layout_overlay_panels(viewport_size: Vector2) -> void:
 	if table_intro_panel != null:
 		var size := Vector2(minf(820.0, viewport_size.x - 96.0), minf(250.0, viewport_size.y - 96.0))
 		_set_control_rect(table_intro_panel, (viewport_size - size) * 0.5, size)
+	if lucien_dare_offer_panel != null:
+		var dare_size := Vector2(minf(760.0, viewport_size.x - 72.0), minf(316.0, viewport_size.y - 96.0))
+		_set_control_rect(lucien_dare_offer_panel, (viewport_size - dare_size) * 0.5, dare_size)
 	if shot_receipt_panel != null:
-		var receipt_size := Vector2(minf(322.0, viewport_size.x - 48.0), 168.0)
-		var receipt_pos := Vector2(24.0, 142.0)
+		var receipt_size := Vector2(minf(360.0, viewport_size.x - 36.0), 104.0)
+		var receipt_pos := Vector2(18.0, 24.0)
 		if viewport_size.x < 860.0:
-			receipt_size = Vector2(minf(300.0, viewport_size.x - 36.0), 150.0)
-			receipt_pos = Vector2(18.0, 112.0)
+			receipt_size = Vector2(minf(340.0, viewport_size.x - 28.0), 118.0)
+			receipt_pos = Vector2((viewport_size.x - receipt_size.x) * 0.5, 18.0)
 		_set_control_rect(shot_receipt_panel, receipt_pos, receipt_size)
 	if pause_panel != null:
 		var pause_size := Vector2(minf(980.0, viewport_size.x - 96.0), minf(704.0, viewport_size.y - 96.0))
@@ -1822,7 +2001,7 @@ func _layout_overlay_panels(viewport_size: Vector2) -> void:
 	if reward_panel != null:
 		var reward_height := 650.0
 		if reward_panel_mode == &"shop":
-			reward_height = 430.0
+			reward_height = 560.0
 		elif reward_panel_mode == &"table_receipt":
 			reward_height = 540.0
 		var reward_size := Vector2(minf(900.0, viewport_size.x - 96.0), minf(reward_height, viewport_size.y - 64.0))
@@ -1834,10 +2013,15 @@ func _layout_overlay_panels(viewport_size: Vector2) -> void:
 func _layout_menu(viewport_size: Vector2) -> void:
 	if menu_panel != null:
 		_fill_control(menu_panel)
+	if menu_art_background != null:
+		_fill_control(menu_art_background)
+	if menu_left_frame != null:
+		var panel_width := minf(560.0, maxf(360.0, viewport_size.x - 56.0))
+		_set_control_rect(menu_left_frame, Vector2(48.0, 34.0), Vector2(panel_width, maxf(0.0, viewport_size.y - 68.0)))
 	if menu_scroll != null:
-		menu_scroll.custom_minimum_size = Vector2(maxf(0.0, viewport_size.x - 108.0), maxf(0.0, viewport_size.y - 76.0))
+		menu_scroll.custom_minimum_size = Vector2(504.0, maxf(0.0, viewport_size.y - 116.0))
 	if menu_root != null:
-		menu_root.custom_minimum_size = Vector2(maxf(880.0, viewport_size.x - 144.0), 0.0)
+		menu_root.custom_minimum_size = Vector2(500.0, 0.0)
 
 func _fill_control(control: Control) -> void:
 	control.anchor_left = 0.0
@@ -1885,10 +2069,61 @@ func _build_table_intro_panel() -> void:
 	box.add_child(table_intro_body)
 	box.add_child(table_intro_footer)
 
+func _build_lucien_dare_offer_panel() -> void:
+	lucien_dare_offer_panel = PanelContainer.new()
+	lucien_dare_offer_panel.position = Vector2(260, 210)
+	lucien_dare_offer_panel.custom_minimum_size = Vector2(760, 316)
+	lucien_dare_offer_panel.visible = false
+	lucien_dare_offer_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.018, 0.009, 0.020, 0.97), THEME_CURSE, 3))
+	ui_layer.add_child(lucien_dare_offer_panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 26)
+	margin.add_theme_constant_override("margin_right", 26)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 22)
+	lucien_dare_offer_panel.add_child(margin)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	margin.add_child(box)
+
+	lucien_dare_offer_title = _new_label("", 30, THEME_GOLD)
+	lucien_dare_offer_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(lucien_dare_offer_title)
+
+	lucien_dare_offer_body = _new_label("", 19, Color(0.92, 0.96, 1.0))
+	lucien_dare_offer_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lucien_dare_offer_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(lucien_dare_offer_body)
+
+	lucien_dare_offer_stakes = _new_label("", 16, Color(1.0, 0.86, 0.54))
+	lucien_dare_offer_stakes.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lucien_dare_offer_stakes.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(lucien_dare_offer_stakes)
+
+	var button_row := HBoxContainer.new()
+	button_row.add_theme_constant_override("separation", 16)
+	box.add_child(button_row)
+
+	lucien_dare_accept_button = Button.new()
+	lucien_dare_accept_button.custom_minimum_size = Vector2(332, 68)
+	_set_button_font_size(lucien_dare_accept_button, 20)
+	_apply_action_button_style(lucien_dare_accept_button, THEME_GOLD, true)
+	lucien_dare_accept_button.pressed.connect(_accept_lucien_dare.bind(false))
+	button_row.add_child(lucien_dare_accept_button)
+
+	lucien_dare_raise_button = Button.new()
+	lucien_dare_raise_button.custom_minimum_size = Vector2(332, 68)
+	_set_button_font_size(lucien_dare_raise_button, 20)
+	_apply_action_button_style(lucien_dare_raise_button, THEME_CURSE, true)
+	lucien_dare_raise_button.pressed.connect(_accept_lucien_dare.bind(true))
+	button_row.add_child(lucien_dare_raise_button)
+
 func _build_shot_receipt_panel() -> void:
 	shot_receipt_panel = PanelContainer.new()
-	shot_receipt_panel.position = Vector2(24, 142)
-	shot_receipt_panel.custom_minimum_size = Vector2(322, 168)
+	shot_receipt_panel.position = Vector2(18, 24)
+	shot_receipt_panel.custom_minimum_size = Vector2(360, 104)
 	shot_receipt_panel.visible = false
 	shot_receipt_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	shot_receipt_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.014, 0.012, 0.022, 0.94), THEME_MINT, 2))
@@ -1902,13 +2137,13 @@ func _build_shot_receipt_panel() -> void:
 	shot_receipt_panel.add_child(margin)
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
+	box.add_theme_constant_override("separation", 2)
 	margin.add_child(box)
 
-	shot_receipt_title = _new_label("", 18, THEME_GOLD)
-	shot_receipt_body = _new_label("", 14, Color(0.86, 0.98, 1.0))
+	shot_receipt_title = _new_label("", 15, THEME_GOLD)
+	shot_receipt_body = _new_label("", 12, Color(0.86, 0.98, 1.0))
 	shot_receipt_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	shot_receipt_footer = _new_label("", 12, Color(0.98, 0.88, 0.68))
+	shot_receipt_footer = _new_label("", 11, Color(0.98, 0.88, 0.68))
 	shot_receipt_footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(shot_receipt_title)
 	box.add_child(shot_receipt_body)
@@ -2008,82 +2243,94 @@ func _build_pause_panel() -> void:
 	action_row_three.add_child(pause_report_button)
 
 func _build_main_menu() -> void:
-	menu_panel = PanelContainer.new()
+	menu_art_background = TextureRect.new()
+	_fill_control(menu_art_background)
+	menu_art_background.texture = MENU_BACKROOM_KEYART
+	menu_art_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	menu_art_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	menu_art_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui_layer.add_child(menu_art_background)
+
+	menu_panel = Control.new()
 	_fill_control(menu_panel)
-	menu_panel.add_theme_stylebox_override("panel", _panel_style(THEME_VOID, Color(0.36, 0.18, 0.48, 0.70), 0))
 	ui_layer.add_child(menu_panel)
 
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 42)
-	margin.add_theme_constant_override("margin_right", 42)
-	margin.add_theme_constant_override("margin_top", 28)
-	margin.add_theme_constant_override("margin_bottom", 28)
-	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	menu_panel.add_child(margin)
+	menu_left_frame = PanelContainer.new()
+	_set_control_rect(menu_left_frame, Vector2(48.0, 34.0), Vector2(560.0, 620.0))
+	menu_left_frame.add_theme_stylebox_override("panel", _panel_style(Color(0.015, 0.016, 0.018, 0.78), Color(0.85, 0.62, 0.25, 0.74), 2))
+	menu_panel.add_child(menu_left_frame)
+
+	var left_margin := MarginContainer.new()
+	left_margin.add_theme_constant_override("margin_left", 28)
+	left_margin.add_theme_constant_override("margin_right", 28)
+	left_margin.add_theme_constant_override("margin_top", 24)
+	left_margin.add_theme_constant_override("margin_bottom", 24)
+	menu_left_frame.add_child(left_margin)
 
 	menu_scroll = ScrollContainer.new()
-	menu_scroll.custom_minimum_size = Vector2(1170, 720)
 	menu_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	menu_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	menu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	menu_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	margin.add_child(menu_scroll)
+	left_margin.add_child(menu_scroll)
 
 	menu_root = VBoxContainer.new()
-	menu_root.custom_minimum_size = Vector2(1120, 0)
-	menu_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	menu_root.add_theme_constant_override("separation", 12)
+	menu_root.custom_minimum_size = Vector2(500, 0)
+	menu_root.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	menu_root.add_theme_constant_override("separation", 14)
 	menu_scroll.add_child(menu_root)
 
 	var title_row := HBoxContainer.new()
-	title_row.add_theme_constant_override("separation", 14)
+	title_row.add_theme_constant_override("separation", 12)
 	menu_root.add_child(title_row)
-	title_row.add_child(_new_ui_icon(&"eye_icon", Vector2(58, 58)))
-	var title := _new_label("HEX HUSTLER", 36, THEME_GOLD)
+	title_row.add_child(_new_ui_icon(&"eye_icon", Vector2(48, 48)))
+	var title := _new_label("HEX HUSTLER", 32, THEME_GOLD)
 	title.autowrap_mode = TextServer.AUTOWRAP_OFF
-	title.custom_minimum_size = Vector2(520, 58)
-	title.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	title.custom_minimum_size = Vector2(420, 48)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(title)
-	title_row.add_child(_new_ui_icon(&"rack_icon", Vector2(62, 58)))
-	var subtitle := _new_label("Lucien Vale has your soul on the slate. Win the full rite or watch him pocket the last marker.", 14, Color(0.84, 0.92, 0.96))
+
+	var subtitle := _new_label("Clear every table before Lucien claims your last soul marker.", 15, Color(0.86, 0.93, 0.94))
 	menu_root.add_child(subtitle)
 
-	menu_summary = _new_label("", 12, THEME_BONE)
+	menu_summary = _new_label("", 13, THEME_BONE)
 	menu_root.add_child(menu_summary)
 
 	var menu_actions := HBoxContainer.new()
-	menu_actions.add_theme_constant_override("separation", 14)
+	menu_actions.add_theme_constant_override("separation", 12)
 	menu_root.add_child(menu_actions)
 
 	var full_button := Button.new()
 	full_button.text = "Begin Full Rite"
-	full_button.icon = _ui_atlas_texture(&"soul_marker")
-	full_button.expand_icon = true
-	full_button.custom_minimum_size = Vector2(430, 62)
-	_set_button_font_size(full_button, 27)
+	full_button.icon = null
+	full_button.expand_icon = false
+	full_button.custom_minimum_size = Vector2(316, 62)
+	_set_button_font_size(full_button, 25)
 	_apply_action_button_style(full_button, THEME_GOLD, true)
 	full_button.pressed.connect(_on_start_full_run_pressed)
 	menu_actions.add_child(full_button)
 
 	var rules_button := Button.new()
 	rules_button.text = "Tutorial"
-	rules_button.icon = _ui_atlas_texture(&"receipt_icon")
-	rules_button.expand_icon = true
-	rules_button.custom_minimum_size = Vector2(250, 62)
-	_set_button_font_size(rules_button, 24)
+	rules_button.icon = null
+	rules_button.expand_icon = false
+	rules_button.custom_minimum_size = Vector2(168, 62)
+	_set_button_font_size(rules_button, 22)
 	_apply_action_button_style(rules_button, THEME_MINT)
 	rules_button.pressed.connect(_show_menu_rules)
 	menu_actions.add_child(rules_button)
 
-	var cue_box := _menu_column("Cue Case")
-	cue_box.custom_minimum_size = Vector2(520, 380)
+	_build_menu_meta_panel(menu_root)
+	_build_menu_loadout_preview(menu_root)
+
+	var cue_box := _menu_column("Cue")
+	cue_box.custom_minimum_size = Vector2(500, 238)
 	var cue_scroll := cue_box.get_node("Scroll") as ScrollContainer
 	if cue_scroll != null:
-		cue_scroll.custom_minimum_size = Vector2(520, 342)
+		cue_scroll.custom_minimum_size = Vector2(500, 188)
 	menu_cue_list = cue_box.get_node("Scroll/List") as VBoxContainer
 	if menu_cue_list != null:
-		menu_cue_list.custom_minimum_size = Vector2(498, 342)
+		menu_cue_list.custom_minimum_size = Vector2(478, 188)
 	menu_root.add_child(cue_box)
 
 	if show_debug_controls:
@@ -2139,8 +2386,8 @@ func _build_main_menu() -> void:
 
 func _build_menu_meta_panel(root: VBoxContainer) -> void:
 	menu_meta_panel = PanelContainer.new()
-	menu_meta_panel.custom_minimum_size = Vector2(1120, 174)
-	menu_meta_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.050, 0.024, 0.058, 0.93), THEME_CURSE, 2))
+	menu_meta_panel.custom_minimum_size = Vector2(500, 164)
+	menu_meta_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.050, 0.024, 0.058, 0.82), Color(THEME_CURSE.r, THEME_CURSE.g, THEME_CURSE.b, 0.72), 2))
 	root.add_child(menu_meta_panel)
 
 	var margin := MarginContainer.new()
@@ -2158,8 +2405,8 @@ func _build_menu_meta_panel(root: VBoxContainer) -> void:
 	header.add_theme_constant_override("separation", 14)
 	box.add_child(header)
 
-	var title := _new_label("Back-Room Augury", 18, THEME_GOLD)
-	title.custom_minimum_size = Vector2(310, 0)
+	var title := _new_label("Back Room Chips", 18, THEME_GOLD)
+	title.custom_minimum_size = Vector2(220, 0)
 	header.add_child(title)
 
 	menu_meta_summary = _new_label("", 12, Color(0.86, 0.96, 1.0))
@@ -2167,9 +2414,9 @@ func _build_menu_meta_panel(root: VBoxContainer) -> void:
 	header.add_child(menu_meta_summary)
 
 	var reset_button := Button.new()
-	reset_button.text = "Clear Marks"
-	reset_button.custom_minimum_size = Vector2(210, 42)
-	reset_button.tooltip_text = "Refund all augury chips so you can redraw the marks before a run."
+	reset_button.text = "Reset"
+	reset_button.custom_minimum_size = Vector2(92, 42)
+	reset_button.tooltip_text = "Refund all Back Room Chips so you can redraw upgrades before a run."
 	_set_button_font_size(reset_button, 16)
 	_apply_action_button_style(reset_button, THEME_CURSE)
 	reset_button.pressed.connect(_on_meta_reset_pressed)
@@ -2187,7 +2434,7 @@ func _build_meta_upgrade_row(id: String) -> HBoxContainer:
 	row.custom_minimum_size = Vector2(0, 34)
 
 	var label := _new_label("", 12, Color(0.94, 0.92, 0.86))
-	label.custom_minimum_size = Vector2(590, 0)
+	label.custom_minimum_size = Vector2(258, 0)
 	row.add_child(label)
 
 	var minus_button := Button.new()
@@ -2207,7 +2454,7 @@ func _build_meta_upgrade_row(id: String) -> HBoxContainer:
 	row.add_child(plus_button)
 
 	var readout := _new_label("", 12, Color(1.0, 0.82, 0.36))
-	readout.custom_minimum_size = Vector2(150, 0)
+	readout.custom_minimum_size = Vector2(86, 0)
 	row.add_child(readout)
 
 	menu_meta_rows[id] = {
@@ -2258,47 +2505,47 @@ func _menu_relic_column() -> VBoxContainer:
 
 func _build_menu_loadout_preview(root: VBoxContainer) -> void:
 	menu_loadout_panel = PanelContainer.new()
-	menu_loadout_panel.custom_minimum_size = Vector2(1120, 124)
+	menu_loadout_panel.custom_minimum_size = Vector2(500, 118)
 	root.add_child(menu_loadout_panel)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 18)
-	margin.add_theme_constant_override("margin_right", 18)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 9)
+	margin.add_theme_constant_override("margin_bottom", 9)
 	menu_loadout_panel.add_child(margin)
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 18)
+	row.add_theme_constant_override("separation", 12)
 	margin.add_child(row)
 
 	var copy_box := VBoxContainer.new()
-	copy_box.custom_minimum_size = Vector2(720, 0)
+	copy_box.custom_minimum_size = Vector2(304, 0)
 	copy_box.add_theme_constant_override("separation", 4)
 	row.add_child(copy_box)
 
-	menu_loadout_title = _new_label("", 22, Color(1.0, 0.84, 0.34))
+	menu_loadout_title = _new_label("", 17, Color(1.0, 0.84, 0.34))
 	copy_box.add_child(menu_loadout_title)
-	menu_loadout_body = _new_label("", 13, Color(0.86, 0.96, 1.0))
-	menu_loadout_body.custom_minimum_size = Vector2(720, 0)
+	menu_loadout_body = _new_label("", 12, Color(0.86, 0.96, 1.0))
+	menu_loadout_body.custom_minimum_size = Vector2(304, 0)
 	copy_box.add_child(menu_loadout_body)
 
 	var swatch_box := VBoxContainer.new()
-	swatch_box.custom_minimum_size = Vector2(330, 0)
-	swatch_box.add_theme_constant_override("separation", 4)
+	swatch_box.custom_minimum_size = Vector2(136, 0)
+	swatch_box.add_theme_constant_override("separation", 2)
 	row.add_child(swatch_box)
 
 	for id in ["felt", "rail", "accent", "shaft", "wrap", "tip"]:
 		var chip_row := HBoxContainer.new()
-		chip_row.add_theme_constant_override("separation", 8)
+		chip_row.add_theme_constant_override("separation", 6)
 		swatch_box.add_child(chip_row)
 		var chip := ColorRect.new()
-		chip.custom_minimum_size = Vector2(76, 16)
+		chip.custom_minimum_size = Vector2(44, 12)
 		chip.color = Color.WHITE
 		chip_row.add_child(chip)
 		menu_loadout_swatches[id] = chip
-		var label := _new_label(_menu_swatch_label(id), 11, Color(0.92, 0.88, 0.78))
-		label.custom_minimum_size = Vector2(210, 16)
+		var label := _new_label(_menu_swatch_label(id), 9, Color(0.92, 0.88, 0.78))
+		label.custom_minimum_size = Vector2(78, 14)
 		chip_row.add_child(label)
 
 func _build_menu_practice_route(root: VBoxContainer) -> void:
@@ -2366,7 +2613,7 @@ func _build_menu_rules_panel() -> void:
 	box.add_child(close_button)
 
 func _menu_rules_text() -> String:
-	return "Goal\nClear every object ball before your soul markers hit 0. Soul markers are your run clock: lose them all and Lucien closes the contract.\n\nControls\nAim from the cue ball. Hold left mouse to charge, release to shoot. Press C or click Call Pocket to label the pockets, then left-click the pocket you want. Right click a pocket still calls it quickly. Q/E sets side spin, W/S sets follow or draw, and X clears spin.\n\nHow you lose soul markers\nCue ball in a pocket: -1 marker.\nNo ball potted: this is a TRUE WHIFF. Every third consecutive true whiff costs -1 marker. Pot any object ball to reset the whiff clock.\nPot exactly one ball and scratch: still -1 marker.\nPot two or more balls and scratch: the scratch is forgiven.\nRisk balls pay more, but scratching on a one-ball risk pot or disturbing a risk ball on a whiff can cost an extra marker.\nLucien's dares are separate from true whiffs. Miss two dares and MARKER CLAIMED: -1 soul marker.\n\nScoring\nEvery pot pays base score. Longer travel adds score as the ball moves. Bank shots, kicks, caroms, kiss pots, called pockets, ricochet pots, chain pots, multi-pots, soft touch, power shots, and clean pocket control add bigger tags.\n\n" + _tag_glossary_text() + "\n\nBetween tables\nThere is no buy-in wager. Lucien sometimes calls a one-shot dare while you aim. Win it for score and cash; miss it for Warning +1. After a clear, the receipt shows exactly how score converts into Back Room Chips. Spend chips on permanent preview, power, and extra-marker upgrades; reset them from the main menu any time.\n\nSpecial balls and hazards\nGold balls pay cash. Risk balls are high-value pressure targets. Bomb balls burst nearby balls. Marked balls and Anchor Eight tables are boss mechanics: break the shield, damage the Anchor Eight, then pot it while vulnerable.\n\nEsc opens the pause ledger."
+	return "Goal\nClear every object ball before your soul markers hit 0. Soul markers are your run clock: lose them all and Lucien closes the contract.\n\nControls\nAim from the cue ball. Hold left mouse to charge, release to shoot. During Lucien's called-pocket dare, press C or click Call Pocket to label pockets, then left-click the pocket you want. Right click a pocket only works during that dare. Q/E sets side spin, W/S sets follow or draw, and X clears spin.\n\nHow you lose soul markers\nCue ball in a pocket: -1 marker.\nNo ball potted: this is a TRUE WHIFF. Every third consecutive true whiff costs -1 marker. Pot any object ball to reset the whiff clock.\nPot exactly one ball and scratch: still -1 marker.\nPot two or more balls and scratch: the scratch is forgiven.\nRisk balls pay more, but scratching on a one-ball risk pot or disturbing a risk ball on a whiff can cost an extra marker.\nNormal Lucien dare misses do not cost soul markers. A failed Double Dare cuts your current soul markers in half.\n\nReputation\nEvery pot earns base Reputation. Longer travel adds Reputation as the ball moves. Bonus tags reward cushion-bounce pots, cue-ball-first cushion shots, cue-ball two-touches, object-ball nudges, called-pocket dares, indirect pots, chain pots, multi-pots, gentle shots, hard shots, and center-pocket entries.\n\n" + _tag_glossary_text() + "\n\nBetween tables\nBankroll is the money you spend now on shop offers and house favors. Lucien sometimes interrupts aiming with a one-shot dare. Clear a dare to refill soul markers. Double Dare for bigger Rep, a full marker refill, and a random rare relic; fail it and your current markers are halved. After a clear, the receipt shows exactly how Reputation converts into Back Room Chips. Spend chips on permanent preview, power, and extra-marker upgrades; reset them from the main menu any time.\n\nSpecial balls and hazards\nGold balls pay Bankroll. Risk balls are high-value pressure targets. Bomb balls burst nearby balls. Marked balls and Anchor Eight tables are boss mechanics: break the shield, damage the Anchor Eight, then pot it while vulnerable.\n\nEsc opens the pause ledger."
 
 func _show_menu_rules() -> void:
 	if menu_rules_panel != null:
@@ -2385,6 +2632,8 @@ func _show_main_menu() -> void:
 		pause_panel.visible = false
 	if menu_rules_panel != null:
 		menu_rules_panel.visible = false
+	if menu_art_background != null:
+		menu_art_background.visible = true
 	menu_panel.visible = true
 	reward_panel.visible = false
 	if table_intro_panel != null:
@@ -2394,6 +2643,8 @@ func _show_main_menu() -> void:
 	if shot_receipt_panel != null:
 		shot_receipt_panel.visible = false
 		shot_receipt_seconds = 0.0
+	if chalk_panel != null:
+		chalk_panel.visible = false
 	ball_tooltip.visible = false
 	relic_tooltip.visible = false
 	hovered_ball = null
@@ -2420,7 +2671,7 @@ func _refresh_meta_panel() -> void:
 	if menu_meta_panel == null:
 		return
 	if menu_meta_summary != null:
-		menu_meta_summary.text = "Marks " + str(_meta_unspent_chips()) + "/" + str(meta_chips_total) + " unspent  |  Progress " + str(meta_chip_score_progress) + "/" + str(META_SCORE_PER_CHIP) + "  |  " + _meta_effect_summary()
+		menu_meta_summary.text = str(_meta_unspent_chips()) + "/" + str(meta_chips_total) + " free | " + str(meta_chip_score_progress) + "/" + str(META_SCORE_PER_CHIP) + " score to next"
 	for id in ["preview", "power", "extra_shot"]:
 		var controls: Dictionary = menu_meta_rows.get(id, {})
 		if controls.is_empty():
@@ -2433,9 +2684,11 @@ func _refresh_meta_panel() -> void:
 		var level := _meta_upgrade_level(id)
 		var max_level := int(def.get("max", 0))
 		if label != null:
-			label.text = String(def.get("name", id)) + " - " + String(def.get("text", "")) + "  " + _meta_upgrade_effect_text(id)
+			label.text = String(def.get("name", id))
+			label.tooltip_text = String(def.get("text", "")) + "\n" + _meta_upgrade_effect_text(id)
 		if readout != null:
 			readout.text = str(level) + "/" + str(max_level)
+			readout.tooltip_text = _meta_upgrade_effect_text(id)
 		if minus_button != null:
 			minus_button.disabled = level <= 0
 		if plus_button != null:
@@ -2490,7 +2743,7 @@ func _meta_effect_summary() -> String:
 	if _meta_extra_shot_bonus() > 0:
 		parts.append("Marker cap +" + str(_meta_extra_shot_bonus()))
 	if parts.is_empty():
-		return "No augury marks drawn"
+		return "No Back Room Chips spent"
 	return ", ".join(parts)
 
 func _meta_upgrade_effect_text(id: String) -> String:
@@ -2686,11 +2939,10 @@ func _collection_status_line(unlocked: bool, selected: bool, freshly_unlocked: b
 
 func _menu_house_case_text() -> String:
 	var lines: Array[String] = []
-	lines.append("Full Rite | Omen " + str(next_run_seed) + " | Stake $" + str(STARTING_CASH) + " | Best " + str(best_run_score) + " | Marks " + str(_meta_unspent_chips()) + "/" + str(meta_chips_total))
-	lines.append("Cue: " + _cue_name(selected_cue_id) + " | " + _cue_style_text(selected_cue_id) + " | " + _menu_collection_progress_text())
-	lines.append(_menu_next_marks_text())
+	lines.append("Soul markers are your run clock. Pot every object ball before Lucien closes the contract.")
+	lines.append("Best score " + str(best_run_score) + "  |  Starting cash $" + str(STARTING_CASH))
 	if _has_new_case_unlocks():
-		lines.append(_new_case_unlock_text(3))
+		lines.append(_new_case_unlock_text(2))
 	return "\n".join(lines)
 
 func _beta_contract_text(context: String = "run") -> String:
@@ -2700,7 +2952,7 @@ func _beta_contract_text(context: String = "run") -> String:
 	lines.append("Seeds: active " + str(run_seed if run_seed != 0 else next_run_seed) + " | next " + str(next_run_seed) + " | last " + ("-" if last_run_seed <= 0 else str(last_run_seed)))
 	lines.append("Current build: " + _active_build_playbook_text())
 	lines.append("Coverage: " + _menu_collection_progress_text() + " | Furthest room " + str(furthest_table_reached + 1) + "/" + str(tables.size()))
-	lines.append("Next marks: " + _next_unlock_preview_text())
+	lines.append("Next unlocks: " + _next_unlock_preview_text())
 	lines.append("Watch list: corner pockets, low-power control, reward readability, juice setting, unlock persistence, full-route completion.")
 	lines.append(_beta_checklist_compact(context))
 	return "\n".join(lines)
@@ -2717,7 +2969,7 @@ func _beta_must_test_line(context: String) -> String:
 		"menu":
 			return "start the full rite, verify the cue case, then try Practice Table on the furthest unlocked room."
 		"end":
-			return "return to menu, confirm new marks/unlocks, then replay the weakest table from Practice."
+			return "return to menu, confirm new chips/unlocks, then replay the weakest table from Practice."
 		_:
 			return "finish the current table, hover active relics and balls, and check the shot receipt after any weird physics."
 
@@ -2735,7 +2987,7 @@ func _beta_checklist_text() -> String:
 	lines.append("Beta Checklist")
 	lines.append("Report: " + _beta_report_line())
 	lines.append("Physics: max-power rails, corner pockets, cue scratch, bomb/explosion settle, no off-table escapes.")
-	lines.append("Scoring: called pocket only on declared mouth, multi-pot, bank/kick/carom tags, breakdown adds up.")
+	lines.append("Scoring: called-pocket dare, multi-pot, cushion-bounce, cue-first cushion, and cue-ball two-touch tags all add up.")
 	lines.append("Run: seed/replay, reward single-click lock, health loss once, menu reset clears transient run state.")
 	lines.append("UI: Steam-Deck-ish readability, aim line on every table, hover balls/relics/rewards, hide debug for screenshots.")
 	return "\n".join(lines)
@@ -2797,8 +3049,8 @@ func _menu_next_marks_text() -> String:
 	if relic_mark != "":
 		marks.append(relic_mark)
 	if marks.is_empty():
-		return "Case marks: all known cues and relics are in the case."
-	return "Case marks: " + " | ".join(marks)
+		return "Case notes: all known cues and relics are in the case."
+	return "Case notes: " + " | ".join(marks)
 
 func _on_menu_cue_selected(id: StringName) -> void:
 	selected_cue_id = id
@@ -2811,16 +3063,22 @@ func _on_menu_board_selected(id: StringName) -> void:
 	_refresh_main_menu()
 
 func _on_start_run_pressed() -> void:
+	if menu_art_background != null:
+		menu_art_background.visible = false
 	menu_panel.visible = false
 	_save_progress()
 	_start_run(false, 0)
 
 func _on_start_full_run_pressed() -> void:
+	if menu_art_background != null:
+		menu_art_background.visible = false
 	menu_panel.visible = false
 	_save_progress()
 	_start_run(false, 0)
 
 func _on_practice_run_pressed() -> void:
+	if menu_art_background != null:
+		menu_art_background.visible = false
 	menu_panel.visible = false
 	_save_progress()
 	_start_run(true, 1)
@@ -2859,6 +3117,245 @@ func _new_run_seed() -> int:
 	if seed_value == run_seed:
 		seed_value += 1
 	return seed_value
+
+func _build_generated_run_tables() -> Array[Dictionary]:
+	var generated: Array[Dictionary] = []
+	for i in range(15):
+		generated.append(_generate_biome_table(i))
+	generated.append(_generate_lucien_final_table())
+	return generated
+
+func _generate_biome_table(index: int) -> Dictionary:
+	var biome := int(index / 5)
+	var stage := index % 5
+	var biome_names := [
+		["House Floor", "Goldjaw Corner", "Risk Ledger", "Marked Rack", "Black Eight Trial"],
+		["Frost Break", "Bomb Chapel", "Ice Ledger", "Cold Collision", "Frost Gate Boss"],
+		["Black Mouth", "Infernal Gate", "Glass Parlor", "Brimstone Maze", "Glass Covenant"]
+	]
+	var biome_labels := ["Cursed house room", "Frost crypt", "Black hell table"]
+	var board_ids := [&"casino_green", &"frost_crypt", &"hell_black"]
+	var modifiers := [&"classic", &"jackpot", &"collision_bonus", &"bank_bonus", &"boss"]
+	var table := {
+		"id": StringName("gen_" + str(biome) + "_" + str(stage)),
+		"name": String(biome_names[biome][stage]),
+		"biome": String(biome_labels[biome]),
+		"board_id": board_ids[biome],
+		"reward_tier": 2 if stage == 4 else 1,
+		"objective": &"clear_rack",
+		"objective_text": "Clear every object ball. The room is generated from the run depth.",
+		"shot_limit": 5 + stage + biome,
+		"modifier": modifiers[mini(stage, modifiers.size() - 1)],
+		"modifier_text": _generated_modifier_text(biome, stage),
+		"balls": _generated_ball_specs(biome, stage),
+		"bumpers": _generated_bumper_specs(biome, stage),
+		"zones": _generated_zone_specs(biome, stage),
+		"pocket_scale": _generated_pocket_scale(biome, stage),
+		"barriers": _generated_barrier_specs(biome, stage),
+		"pocket_gates": _generated_pocket_gates(biome, stage)
+	}
+	if stage == 1:
+		table["jackpot_pocket"] = &"NE"
+	if stage >= 2:
+		table["risk_pocket"] = &"S" if biome == 0 else &"NE"
+	if biome == 0 and stage == 4:
+		table["objective"] = &"boss"
+		table["boss_mode"] = &"shrink_eight"
+		table["boss_health"] = 3
+		table["boss_shrink_hits_required"] = 3
+		table["objective_text"] = "Hit the oversized Black Eight hard three times to shrink it, then pot it."
+		table["modifier"] = &"boss"
+		table["reward_tier"] = 2
+	elif biome == 1 and stage == 4:
+		table["objective_text"] = "Clear the cold boss rack through smaller pockets while bombs, bumpers, and ice mix in."
+		table["modifier"] = &"collision_bonus"
+		table["pocket_scale"] = 0.72
+		table["reward_tier"] = 2
+	elif biome == 2 and stage == 4:
+		table["objective_text"] = "Pot every glass ball before any one of them cracks a fourth time."
+		table["modifier"] = &"sticky_felt"
+		table["pocket_scale"] = 0.70
+		table["reward_tier"] = 2
+	return table
+
+func _generated_modifier_text(biome: int, stage: int) -> String:
+	if biome == 0:
+		match stage:
+			0:
+				return "The baseline occult table: normal balls and standard pockets."
+			1:
+				return "Gold balls enter the route and pay Bankroll."
+			2:
+				return "Risk balls enter the route and pay extra if you keep the cue safe."
+			3:
+				return "Gold, risk, and tighter traffic combine before the Black Eight trial."
+			_:
+				return "The oversized Black Eight cannot be potted until three hard hits shrink it."
+	if biome == 1:
+		match stage:
+			0:
+				return "Bomb balls start appearing on colder, faster cloth."
+			1:
+				return "Bumpers join the bomb rack."
+			2:
+				return "Ice fields bend the run toward banked control."
+			3:
+				return "Cold gimmicks mix with the previous biome's gold and risk pressure."
+			_:
+				return "Small pockets turn the cold boss rack into a precision test."
+	match stage:
+		0:
+			return "The hell biome opens with black cloth and smaller pockets."
+		1:
+			return "Partial pocket barriers force angled entries."
+		2:
+			return "Glass balls show progressive cracks and break on a fourth bad hit."
+		3:
+			return "Small pockets, barriers, bombs, ice, risk, and glass all mix."
+		_:
+			return "The glass boss table demands clean pots through gated, narrow mouths."
+
+func _generated_ball_specs(biome: int, stage: int) -> Array[Dictionary]:
+	var specs: Array[Dictionary] = []
+	var count := 4 + stage + biome
+	var positions := _generated_rack_positions(count + 2, biome, stage)
+	for i in range(count):
+		var kind: StringName = &"normal"
+		if biome == 0:
+			if stage >= 1 and i == 1:
+				kind = &"gold"
+			elif stage >= 2 and i == 2:
+				kind = &"risk"
+		elif biome == 1:
+			if i % 5 == 1:
+				kind = &"bomb"
+			elif stage >= 2 and i % 5 == 3:
+				kind = &"risk"
+			elif stage >= 3 and i % 5 == 4:
+				kind = &"gold"
+		else:
+			if stage >= 2 and i % 3 == 1:
+				kind = &"glass"
+			elif i % 6 == 2:
+				kind = &"bomb"
+			elif i % 6 == 3:
+				kind = &"risk"
+			elif i % 6 == 4:
+				kind = &"gold"
+		specs.append({
+			"kind": kind,
+			"pos": positions[i],
+			"glass_break_limit": 3
+		})
+	if biome == 0 and stage == 4:
+		specs.append({"kind": &"boss", "pos": Vector2(878, 408), "radius": 34.0, "score": 600})
+	elif biome == 2 and stage == 4:
+		specs.append({"kind": &"glass", "pos": Vector2(902, 408), "score": 260, "glass_break_limit": 3})
+	return specs
+
+func _generated_rack_positions(count: int, biome: int, stage: int) -> Array[Vector2]:
+	var positions: Array[Vector2] = []
+	var origin := Vector2(694.0 + float(biome) * 18.0, 408.0)
+	var spacing := 52.0
+	for i in range(count):
+		var column := int(i / 2)
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var wobble := float(((i + stage * 3 + biome * 5) % 5) - 2) * 7.0
+		var pos := origin + Vector2(float(column) * spacing, side * (30.0 + float(column % 3) * 9.0) + wobble)
+		if i == 0:
+			pos = origin + Vector2(0.0, 0.0)
+		positions.append(_clamp_ball_inside_table(pos, BALL_RADIUS + 34.0))
+	return positions
+
+func _generated_bumper_specs(biome: int, stage: int) -> Array[Dictionary]:
+	var bumpers: Array[Dictionary] = []
+	if biome >= 1 and stage >= 1:
+		bumpers.append({"id": &"left_idol", "pos": Vector2(628, 334), "radius": 22.0 + float(stage)})
+	if biome >= 1 and stage >= 3:
+		bumpers.append({"id": &"right_idol", "pos": Vector2(930, 482), "radius": 24.0})
+	if biome >= 2 and stage >= 3:
+		bumpers.append({"id": &"hell_idol", "pos": Vector2(800, 408), "radius": 20.0})
+	return bumpers
+
+func _generated_zone_specs(biome: int, stage: int) -> Array[Dictionary]:
+	var zones: Array[Dictionary] = []
+	if biome >= 1 and stage >= 2:
+		zones.append({"id": &"ice_lane", "kind": &"ice", "rect": Rect2(560, 296, 470, 78), "strength": 1.016 + float(stage) * 0.002})
+	if biome >= 2 and stage >= 3:
+		zones.append({"id": &"tar_rite", "kind": &"sticky", "rect": Rect2(672, 436, 330, 76), "strength": 0.48 + float(stage) * 0.03})
+	if biome == 2 and stage == 4:
+		zones.append({"id": &"hell_ice", "kind": &"ice", "rect": Rect2(524, 310, 170, 210), "strength": 1.014})
+	return zones
+
+func _generated_pocket_scale(biome: int, stage: int) -> float:
+	if biome == 2:
+		return 0.82 - float(stage) * 0.03
+	if biome == 1 and stage == 4:
+		return 0.72
+	return 1.0
+
+func _generated_barrier_specs(biome: int, stage: int) -> Array[Dictionary]:
+	var barriers: Array[Dictionary] = []
+	if biome < 2:
+		return barriers
+	if stage >= 1:
+		barriers.append({"id": &"ne_top_gate", "rect": Rect2(TABLE_RECT.end.x - 142.0, TABLE_RECT.position.y - 8.0, 82.0, 18.0)})
+		barriers.append({"id": &"ne_side_gate", "rect": Rect2(TABLE_RECT.end.x - 8.0, TABLE_RECT.position.y + 58.0, 18.0, 92.0)})
+	if stage >= 3:
+		barriers.append({"id": &"sw_side_gate", "rect": Rect2(TABLE_RECT.position.x - 10.0, TABLE_RECT.end.y - 150.0, 18.0, 92.0)})
+		barriers.append({"id": &"sw_bottom_gate", "rect": Rect2(TABLE_RECT.position.x + 60.0, TABLE_RECT.end.y - 10.0, 92.0, 18.0)})
+	return barriers
+
+func _generated_pocket_gates(biome: int, stage: int) -> Array[Dictionary]:
+	var gates: Array[Dictionary] = []
+	if biome < 2:
+		return gates
+	if stage >= 1:
+		gates.append({"id": &"NE", "axis": Vector2(-1.0, 1.0).normalized(), "min_alignment": 0.62})
+	if stage >= 3:
+		gates.append({"id": &"SW", "axis": Vector2(1.0, -1.0).normalized(), "min_alignment": 0.62})
+	if stage == 4:
+		gates.append({"id": &"S", "axis": Vector2(0.0, -1.0), "min_alignment": 0.70})
+	return gates
+
+func _generate_lucien_final_table() -> Dictionary:
+	return {
+		"id": &"lucien_final",
+		"name": "Lucien Final Boss",
+		"biome": "Black hell table",
+		"board_id": &"hell_black",
+		"reward_tier": 3,
+		"objective": &"boss",
+		"objective_text": "Break the shield, survive every previous gimmick, then pot Lucien's teleporting Black Eight.",
+		"shot_limit": 12,
+		"boss_health": 3,
+		"boss_health_required": 3,
+		"boss_mode": &"teleport_eight",
+		"modifier": &"boss",
+		"modifier_text": "Lucien mixes bombs, risk, gold, ice, bumpers, glass, gated pockets, smaller mouths, and a teleporting final Eight.",
+		"pocket_scale": 0.68,
+		"jackpot_pocket": &"SW",
+		"risk_pocket": &"NE",
+		"balls": [
+			{"kind": &"normal", "marked": true, "pos": Vector2(690, 334)},
+			{"kind": &"risk", "marked": true, "pos": Vector2(760, 486)},
+			{"kind": &"glass", "pos": Vector2(832, 350), "score": 260, "glass_break_limit": 3},
+			{"kind": &"bomb", "pos": Vector2(910, 486)},
+			{"kind": &"gold", "pos": Vector2(978, 334)},
+			{"kind": &"risk", "pos": Vector2(1018, 458)},
+			{"kind": &"boss", "pos": Vector2(872, 408), "radius": 22.0, "score": 900}
+		],
+		"bumpers": [
+			{"id": &"lucien_left", "pos": Vector2(618, 350), "radius": 24.0},
+			{"id": &"lucien_right", "pos": Vector2(966, 464), "radius": 24.0}
+		],
+		"zones": [
+			{"id": &"lucien_ice", "kind": &"ice", "rect": Rect2(548, 292, 250, 76), "strength": 1.018},
+			{"id": &"lucien_tar", "kind": &"sticky", "rect": Rect2(812, 452, 246, 76), "strength": 0.56}
+		],
+		"barriers": _generated_barrier_specs(2, 4),
+		"pocket_gates": _generated_pocket_gates(2, 4)
+	}
 
 func _run_table_goal_count() -> int:
 	if practice_run:
@@ -3031,10 +3528,10 @@ func _pause_help_text() -> String:
 		table_text = _contract_route_name_text() + " table " + _contract_room_progress_text() + ": " + _table_tier_text(current_table) + " | " + String(current_table.get("name", "Table"))
 	var objective := _objective_progress_text() if not current_table.is_empty() else "Progress: -"
 	var mode_text := "Practice marker | " if practice_run else ""
-	return "Left mouse: hold and release to shoot | C/click Call Pocket or right click: call a pocket | Q/E and W/S: English | X: reset spin\n\n" + mode_text + seed_text + " | " + table_text + " | " + _audio_settings_text() + " | " + _juice_settings_text() + "\n" + objective + "\n" + _pause_build_text() + "\n\nPress D during play to print a compact debug report to the Godot output."
+	return "Left mouse: hold and release to shoot | Called-pocket dare only: C/click Call Pocket or right click | Q/E and W/S: spin | X: reset spin\n\n" + mode_text + seed_text + " | " + table_text + " | " + _audio_settings_text() + " | " + _juice_settings_text() + "\n" + objective + "\n" + _pause_build_text() + "\n\nPress D during play to print a compact debug report to the Godot output."
 
 func _pause_build_text() -> String:
-	return "Stake: " + str(run_score) + " score | " + _cash_status_text() + " | Soul markers " + str(run_health) + " | " + _run_pressure_text() + "\nCue: " + _cue_name(selected_cue_id) + " | " + _cue_trait_text(selected_cue_id) + "\nRoom cloth: " + _board_name(selected_board_id) + " | " + _board_trait_text(selected_board_id) + "\n" + _run_upgrade_summary() + "\nRelics: " + _compact_relic_names(5)
+	return "Rep: " + str(run_score) + " | " + _cash_status_text() + " | Soul markers " + str(run_health) + " | " + _run_pressure_text() + "\nCue: " + _cue_name(selected_cue_id) + " | " + _cue_trait_text(selected_cue_id) + "\nRoom cloth: " + _board_name(selected_board_id) + " | " + _board_trait_text(selected_board_id) + "\n" + _run_upgrade_summary() + "\nRelics: " + _compact_relic_names(5)
 
 func _pause_beta_ledger_text() -> String:
 	var lines: Array[String] = []
@@ -3080,11 +3577,11 @@ func _tag_glossary_text() -> String:
 	var lines: Array[String] = []
 	lines.append("Shot Tag House Book")
 	lines.append("POT: any scoring ball drops. MULTI_POT: 2+ balls drop on one shot.")
-	lines.append("BANK: a scoring pot after rail contact. KICK: cue ball hit a rail before first object contact.")
+	lines.append("BANK: a scoring ball touches a cushion before it drops. KICK: the cue ball touches a cushion before its first target.")
 	lines.append("CAROM: cue ball contacts 2+ object balls. KISS: an object ball bumps another object before the pot.")
 	lines.append("RICOCHET_POT: a ball drops after another object ball set it up. CHAIN_POT: next-shot bonus after a scoring pot.")
-	lines.append("LONG_POT: long travel into a pocket. PERFECT_POT: center-cut pocket entry.")
-	lines.append("SOFT_TOUCH: low-power scoring shot. POWER_SHOT: high-power scoring shot.")
+	lines.append("LONG_POT: long travel into a pocket. PERFECT_POT: ball enters near pocket center.")
+	lines.append("SOFT_TOUCH: gentle low-power scoring shot. POWER_SHOT: hard high-power scoring shot.")
 	lines.append("CALLED_POCKET: called pocket was hit. CLUSTER_BREAK: 4+ balls moved.")
 	lines.append("SCRATCH: cue ball potted. BOSS_HIT: Lucien's Anchor Eight took impact damage.")
 	lines.append("TRUE WHIFF: no ball potted on the shot. Every third consecutive true whiff costs 1 soul marker.")
@@ -3094,7 +3591,7 @@ func _tag_glossary_text() -> String:
 	return "\n".join(lines)
 
 func _compact_tag_glossary_line() -> String:
-	return "Tag book: BANK rails, KICK rail-first cue, CAROM 2+ cue contacts, KISS object-to-object, RICOCHET indirect pot, CHAIN next-shot pot, LONG distance, PERFECT center cut, SOFT low power, POWER high power, CALLED pocket, CLUSTER 4+ moved, RUNOUT clean table, ONE_BALL_CLEAR one-shot table, EVERY_SHOT_POT all shots paid."
+	return "Tag book: BANK ball uses a cushion, KICK cue uses a cushion first, CAROM cue touches 2+ balls, KISS object-to-object, RICOCHET indirect pot, CHAIN next-shot pot, LONG distance, PERFECT center entry, SOFT gentle shot, POWER hard shot, CALLED dare pocket, CLUSTER 4+ moved, RUNOUT clean table, ONE_BALL_CLEAR one-shot table, EVERY_SHOT_POT all shots paid."
 
 func _active_build_playbook_text() -> String:
 	var hints: Array[String] = []
@@ -3193,7 +3690,7 @@ func _return_to_menu_from_pause() -> void:
 func _reset_progress_from_pause() -> void:
 	_reset_progress()
 	_refresh_main_menu()
-	pause_body.text = "Progress reset.\n\nLeft mouse: hold and release to shoot\nC/click Call Pocket or right click: call a pocket\nQ/E and W/S set English\nEsc: pause/options\n\nThe house will forget all unlocked cues, relics, chalk, and best runs."
+	pause_body.text = "Progress reset.\n\nLeft mouse: hold and release to shoot\nCall Pocket controls only appear during Lucien's called-pocket dare\nQ/E and W/S set spin\nEsc: pause/options\n\nThe house will forget all unlocked cues, relics, chalk, and best runs."
 	if pause_audio_button != null:
 		pause_audio_button.text = _audio_settings_text()
 	if pause_juice_button != null:
@@ -3266,7 +3763,7 @@ func _cue_trait_text(id: StringName) -> String:
 	var power := int(round(float(def.get("max_power", 1.0)) * 100.0))
 	var touch := int(round(float(def.get("min_power", 1.0)) * 100.0))
 	var aim := int(round(float(def.get("aim", 1.0)) * 100.0))
-	return _cue_style_text(id) + " | Power " + str(power) + "% | Low touch " + str(touch) + "% | Aim " + str(aim) + "%"
+	return _cue_style_text(id) + " | Power " + str(power) + "% | Gentle floor " + str(touch) + "% | Aim " + str(aim) + "%"
 
 func _cue_style_text(id: StringName) -> String:
 	match id:
@@ -3276,10 +3773,14 @@ func _cue_style_text(id: StringName) -> String:
 			return "Heavy red breaker"
 		&"dead_eye_cue":
 			return "Pale precision cue"
+		&"seers_fork":
+			return "Blue rebound-reader"
 		&"bookies_hook":
 			return "Amber called-pocket hook"
 		&"chapel_bridge":
 			return "Violet carom bridge"
+		&"free_hand":
+			return "Gold scratch-reset cue"
 		&"eight_cane":
 			return "Purple boss cane"
 		_:
@@ -3313,7 +3814,7 @@ func _refresh_menu_loadout_preview() -> void:
 	var fill := felt.lerp(Color(0.018, 0.012, 0.025), 0.30)
 	fill.a = 0.94
 	menu_loadout_panel.add_theme_stylebox_override("panel", _panel_style(fill, Color(accent.r, accent.g, accent.b, 0.88), 2))
-	menu_loadout_title.text = "Loaded Case | " + _cue_name(selected_cue_id) + " / " + _board_name(selected_board_id)
+	menu_loadout_title.text = "Loaded Case"
 	menu_loadout_body.text = _menu_loadout_preview_text()
 	_set_menu_swatch("felt", felt)
 	_set_menu_swatch("rail", rail)
@@ -3329,13 +3830,45 @@ func _set_menu_swatch(id: String, color: Color) -> void:
 
 func _menu_loadout_preview_text() -> String:
 	var lines: Array[String] = []
-	lines.append(_cue_visual_line(selected_cue_id))
-	lines.append(_board_visual_line(selected_board_id))
-	lines.append("Opening read: " + _active_build_playbook_text())
+	lines.append(_cue_name(selected_cue_id) + "  |  " + _board_name(selected_board_id))
+	lines.append(_short_cue_style_text(selected_cue_id) + " cue  |  " + _short_board_read_text(selected_board_id))
 	if _has_new_case_unlocks():
-		lines.append(_new_case_unlock_text(4))
-	lines.append(_menu_next_marks_text())
+		lines.append(_new_case_unlock_text(2))
 	return "\n".join(lines)
+
+func _short_cue_style_text(id: StringName) -> String:
+	match id:
+		&"rail_baron":
+			return "rail"
+		&"breakers_maul":
+			return "break"
+		&"dead_eye_cue":
+			return "long"
+		&"bookies_hook":
+			return "curve"
+		&"chapel_bridge":
+			return "carom"
+		&"seers_fork":
+			return "preview"
+		&"free_hand":
+			return "control"
+		&"eight_cane":
+			return "boss"
+		_:
+			return "balanced"
+
+func _short_board_read_text(id: StringName) -> String:
+	match id:
+		&"casino_green":
+			return "honest cloth"
+		&"smoke_blue":
+			return "long slide"
+		&"blood_rose":
+			return "hot rails"
+		&"grave_felt":
+			return "slow cloth"
+		_:
+			return "occult cloth"
 
 func _cue_visual_line(id: StringName) -> String:
 	var def := _cue_def(id)
@@ -3363,57 +3896,61 @@ func _board_trait_text(id: StringName) -> String:
 	if capture < 0.98:
 		pocket_text = "tight pockets"
 	elif capture > 1.01:
-		pocket_text = "generous cash mouths"
+		pocket_text = "generous Bankroll mouths"
 	return "Felt " + pace + " | Rail " + str(int(round(rail_bounce * 100.0))) + "% | " + pocket_text + " | " + _board_effect_text(id)
 
 func _board_effect_text(id: StringName) -> String:
 	match id:
 		&"velvet_blue":
-			return "Cloth Hex: BANK/KICK +90"
+			return "Cloth Hex: cushion-bounce or cue-first cushion pot +90"
 		&"cashier_gold":
 			return "Cloth Hex: gold pots +$3"
 		&"bookie_slate":
-			return "Cloth Hex: CALLED_POCKET +90"
+			return "Cloth Hex: called-pocket dare pot +90"
 		&"rain_glass":
-			return "Cloth Hex: LONG BANK +160, +$2"
+			return "Cloth Hex: long cushion-bounce pot +160, +$2"
 		&"midnight_crypt":
 			return "Cloth Hex: Anchor hit +110 or risk +120"
 		&"house_vault":
-			return "Cloth Hex: PERFECT_POT +120 and clean shots +40"
+			return "Cloth Hex: center-pocket pot +120 and clean shots +40"
 		_:
 			return "Cloth Hex: balanced"
 
 func _cue_play_hint(id: StringName) -> String:
 	match id:
 		&"rail_baron":
-			return "BANK, KICK, and controlled rails."
+			return "pots after cushion bounces and cue-ball-first cushion shots."
 		&"breakers_maul":
-			return "POWER_SHOT, CLUSTER_BREAK, and early rack opening."
+			return "hard shots, four-ball scatters, and early rack opening."
 		&"dead_eye_cue":
-			return "PERFECT_POT and CALLED_POCKET precision."
+			return "center-pocket pots and called-pocket dare precision."
+		&"seers_fork":
+			return "cue-ball rebound reads, indirect pots, and two-ball touches."
 		&"bookies_hook":
-			return "CALLED_POCKET routes and jackpot pocket planning."
+			return "called-pocket dare routes and jackpot pocket planning."
 		&"chapel_bridge":
-			return "CAROM, KISS, and gentle traffic."
+			return "cue-ball two-touches, object-ball nudges, and gentle traffic."
+		&"free_hand":
+			return "scratch recovery, safer cue-ball placement, and insurance markers."
 		&"eight_cane":
-			return "Anchor-hit setups and called Anchor finishes."
+			return "Anchor-hit setups and final Eight finishes."
 		_:
-			return "balanced POT, BANK, and SOFT_TOUCH tests."
+			return "balanced pots, cushion bounces, and gentle-shot tests."
 
 func _board_play_hint(id: StringName) -> String:
 	match id:
 		&"velvet_blue":
-			return "BANK, KICK, and slower control lines."
+			return "cushion-bounce pots, cue-first cushion shots, and slower control lines."
 		&"cashier_gold":
-			return "gold-ball cash routes and safe jackpots."
+			return "gold-ball Bankroll routes and safe jackpots."
 		&"bookie_slate":
-			return "CALLED_POCKET routes with less rail gambling."
+			return "called-pocket dare routes with less cushion gambling."
 		&"rain_glass":
-			return "fast LONG_POT and BANK lines."
+			return "fast long pots and cushion-bounce lines."
 		&"midnight_crypt":
 			return "Anchor-hit control and risk-ball cashouts."
 		&"house_vault":
-			return "PERFECT_POT and no-miss clean play."
+			return "center-pocket pots and no-miss clean play."
 		_:
 			return "standard house pace for all builds."
 
@@ -3427,49 +3964,57 @@ func _board_jaw_bounce() -> float:
 	return clampf(float(_board_def(selected_board_id).get("jaw_bounce", 0.30)), 0.16, 0.42)
 
 func _board_pocket_capture_radius() -> float:
-	return POCKET_CAPTURE_RADIUS * clampf(float(_board_def(selected_board_id).get("pocket_capture", 1.0)), 0.88, 1.06)
+	return POCKET_CAPTURE_RADIUS * clampf(float(_board_def(selected_board_id).get("pocket_capture", 1.0)), 0.88, 1.06) * _table_pocket_scale()
 
 func _board_pocket_sensor_radius() -> float:
-	return POCKET_SENSOR_RADIUS * clampf(float(_board_def(selected_board_id).get("pocket_sensor", 1.0)), 0.90, 1.06)
+	return POCKET_SENSOR_RADIUS * clampf(float(_board_def(selected_board_id).get("pocket_sensor", 1.0)), 0.90, 1.06) * _table_pocket_scale()
+
+func _board_pocket_visual_radius() -> float:
+	return POCKET_VISUAL_RADIUS * clampf(float(_board_def(selected_board_id).get("pocket_sensor", 1.0)), 0.90, 1.06) * _table_pocket_scale()
 
 func _board_pocket_throat_radius() -> float:
 	var capture_scale := clampf(float(_board_def(selected_board_id).get("pocket_capture", 1.0)), 0.88, 1.06)
-	return POCKET_THROAT_RADIUS * clampf(0.98 + (capture_scale - 1.0) * 0.55, 0.94, 1.05)
+	return POCKET_THROAT_RADIUS * clampf(0.98 + (capture_scale - 1.0) * 0.55, 0.94, 1.05) * _table_pocket_scale()
+
+func _table_pocket_scale() -> float:
+	if current_table.is_empty():
+		return 1.0
+	return clampf(float(current_table.get("pocket_scale", 1.0)), 0.62, 1.08)
 
 func _relic_play_hint(id: StringName) -> String:
 	match id:
 		&"money_ball":
-			return "gold-ball cash routes."
+			return "gold-ball Bankroll routes."
 		&"sniper":
 			return "precision lines on your first three shots."
 		&"entropy_scanner":
-			return "multi-contact ricochet planning."
+			return "multi-contact indirect-pot planning."
 		&"center_cut":
-			return "PERFECT_POT entries."
+			return "center-pocket entries."
 		&"rail_coupon":
-			return "BANK and KICK pots."
+			return "cushion-bounce and cue-first cushion pots."
 		&"combo_receipt":
 			return "MULTI_POT shots."
 		&"spare_ball":
 			return "clearing tables with balls left."
 		&"chalk_credit":
-			return "SOFT_TOUCH scoring shots."
+			return "gentle Reputation shots."
 		&"long_glass":
 			return "LONG_POT routes."
 		&"hot_hand":
 			return "CHAIN_POT streaks."
 		&"split_lens":
-			return "RICOCHET_POT payouts."
+			return "indirect-pot payouts."
 		&"called_tab":
-			return "CALLED_POCKET payouts."
+			return "called-pocket dare payouts."
 		&"bumper_policy":
-			return "CLUSTER_BREAK rack movement."
+			return "four-ball scatter movement."
 		&"quiet_hands":
-			return "gentle SOFT_TOUCH control."
+			return "gentle-shot control."
 		&"witching_well":
-			return "long, carom, and kiss routes through the center field."
+			return "long shots, cue-ball two-touches, and object-ball nudges through the center field."
 		&"salt_circle":
-			return "soft-touch control inside the center ward."
+			return "gentle-shot control inside the center ward."
 		&"blood_moon":
 			return "risk-ball pots and aggressive red-field routes."
 		&"grave_lantern":
@@ -3594,8 +4139,8 @@ func _next_unlock_preview_text() -> String:
 	if relic_mark != "":
 		marks.append(relic_mark)
 	if marks.is_empty():
-		return "Next marks: all known cues and relics unlocked."
-	return "Next marks: " + " | ".join(marks)
+		return "Next unlocks: all known cues and relics unlocked."
+	return "Next unlocks: " + " | ".join(marks)
 
 func _first_locked_def_unlock(defs: Dictionary, unlocked_ids: Array[StringName], label: String) -> String:
 	for id in defs.keys():
@@ -3678,16 +4223,27 @@ func _select_chalk(id: StringName) -> void:
 	_sync_chalk_panel()
 	_update_hud()
 
+func _has_chalk_inventory() -> bool:
+	for key in chalk_inventory.keys():
+		if int(chalk_inventory.get(key, 0)) > 0:
+			return true
+	return false
+
+func _should_show_chalk_panel() -> bool:
+	if not run_active:
+		return false
+	match state:
+		State.AIMING, State.CHARGING_SHOT, State.SHOT_IN_MOTION, State.SHOT_RESOLVING:
+			return _has_chalk_inventory()
+		_:
+			return false
+
 func _sync_chalk_panel() -> void:
 	if chalk_list == null:
 		return
-	var has_chalk := false
-	for key in chalk_inventory.keys():
-		if int(chalk_inventory.get(key, 0)) > 0:
-			has_chalk = true
-			break
+	var has_chalk := _has_chalk_inventory()
 	if chalk_panel != null:
-		chalk_panel.visible = false
+		chalk_panel.visible = _should_show_chalk_panel()
 	var signature := String(equipped_chalk_id) + "|"
 	for id in CHALK_DEFS.keys():
 		signature += String(id) + ":" + str(int(chalk_inventory.get(String(id), 0))) + ";"
@@ -3735,13 +4291,13 @@ func _chalk_button(id: StringName) -> Button:
 func _chalk_play_hint(id: StringName) -> String:
 	match id:
 		&"blue_chalk":
-			return "opening racks, called pockets, perfect pots, and long reads."
+			return "opening racks, called-pocket dares, center-pocket pots, and long reads."
 		&"red_chalk":
 			return "break shots, clusters, bumpers, and sticky felt."
 		&"safe_chalk":
 			return "scratch-risk routes near risk balls or tight pockets."
 		&"gold_chalk":
-			return "any planned scoring pot when cash matters."
+			return "any planned pot when Bankroll matters."
 		&"bomb_chalk":
 			return "first-pot detonations and crowded racks."
 		&"rail_chalk":
@@ -3773,6 +4329,161 @@ func _apply_board_skin_to_current_table() -> void:
 	current_table["accent"] = board.get("accent", current_table.get("accent", Color.CYAN))
 	current_table["rail_color"] = board.get("rail", current_table.get("rail_color", Color(0.09, 0.055, 0.035)))
 	current_table["outer_color"] = board.get("outer", current_table.get("outer_color", Color(0.05, 0.028, 0.018)))
+
+func _apply_table_variant(index: int) -> void:
+	match StringName(current_table.get("id", &"")):
+		&"side_bet_alley":
+			_apply_side_bet_alley_variant(index)
+
+func _table_variant_rng(index: int, salt: int = 0) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	var base_seed := run_seed
+	if base_seed <= 0:
+		base_seed = next_run_seed
+	var practice_offset := selected_practice_table if practice_run else 0
+	var key := String(current_table.get("id", &"")) + ":" + str(base_seed) + ":" + str(index) + ":" + str(practice_offset) + ":" + str(salt)
+	rng.seed = int(abs(hash(key)))
+	return rng
+
+func _jitter_table_position(pos: Vector2, rng: RandomNumberGenerator, x_amount: int = 18, y_amount: int = 14) -> Vector2:
+	var jitter := Vector2(rng.randi_range(-x_amount, x_amount), rng.randi_range(-y_amount, y_amount))
+	var result := pos + jitter
+	var inset := 68.0
+	return Vector2(
+		clampf(result.x, TABLE_RECT.position.x + inset, TABLE_RECT.end.x - inset),
+		clampf(result.y, TABLE_RECT.position.y + inset, TABLE_RECT.end.y - inset)
+	)
+
+func _apply_side_bet_alley_variant(index: int) -> void:
+	var rng := _table_variant_rng(index, 411)
+	var variants: Array[Dictionary] = [
+		{
+			"name": "Hot Side",
+			"biome": "Neon bookie rail",
+			"board_id": &"bookie_slate",
+			"jackpot": &"S",
+			"risk": &"N",
+			"shot_limit": 6,
+			"variant_rule": "South pocket is hot; north pocket shaves Reputation.",
+			"modifier_text": "The south side is paying tonight. Two bookie posts pinch the clean route.",
+			"bumpers": [
+				{"id": &"bookie_post_a", "pos": Vector2(808, 410), "radius": 22.0},
+				{"id": &"bookie_post_b", "pos": Vector2(656, 462), "radius": 18.0}
+			],
+			"zones": [
+				{"id": &"slick_side_lane", "kind": &"ice", "rect": Rect2(620, 376, 360, 54), "strength": 1.014}
+			],
+			"balls": [
+				{"kind": &"normal", "pos": Vector2(666, 342)},
+				{"kind": &"risk", "pos": Vector2(736, 390)},
+				{"kind": &"gold", "pos": Vector2(874, 430)},
+				{"kind": &"normal", "pos": Vector2(940, 474)},
+				{"kind": &"normal", "pos": Vector2(942, 330)}
+			]
+		},
+		{
+			"name": "Corner Spread",
+			"biome": "Cashier corner action",
+			"board_id": &"cashier_gold",
+			"jackpot": &"SE",
+			"risk": &"W",
+			"shot_limit": 7,
+			"variant_rule": "South-east corner is hot; west pocket clips Reputation.",
+			"modifier_text": "The cashier pushes the odds to a corner pocket with a slow middle strip.",
+			"bumpers": [
+				{"id": &"cashier_post_a", "pos": Vector2(804, 350), "radius": 20.0},
+				{"id": &"cashier_post_b", "pos": Vector2(856, 474), "radius": 20.0}
+			],
+			"zones": [
+				{"id": &"cashier_drag", "kind": &"sticky", "rect": Rect2(706, 306, 190, 206), "strength": 0.42}
+			],
+			"balls": [
+				{"kind": &"gold", "pos": Vector2(680, 504)},
+				{"kind": &"normal", "pos": Vector2(710, 350)},
+				{"kind": &"normal", "pos": Vector2(790, 408)},
+				{"kind": &"risk", "pos": Vector2(890, 354)},
+				{"kind": &"normal", "pos": Vector2(962, 452)},
+				{"kind": &"bomb", "pos": Vector2(990, 324)}
+			]
+		},
+		{
+			"name": "Rail Split",
+			"biome": "Rain-glass odds lane",
+			"board_id": &"rain_glass",
+			"jackpot": &"N",
+			"risk": &"S",
+			"shot_limit": 7,
+			"variant_rule": "North pocket is hot; south pocket taxes Reputation.",
+			"modifier_text": "Fast glass lanes split the table and reward long controlled angles.",
+			"bumpers": [
+				{"id": &"split_post_a", "pos": Vector2(712, 406), "radius": 18.0},
+				{"id": &"split_post_b", "pos": Vector2(930, 406), "radius": 24.0}
+			],
+			"zones": [
+				{"id": &"upper_fast_lane", "kind": &"ice", "rect": Rect2(552, 292, 236, 80), "strength": 1.016},
+				{"id": &"lower_fast_lane", "kind": &"ice", "rect": Rect2(850, 492, 220, 58), "strength": 1.014}
+			],
+			"balls": [
+				{"kind": &"normal", "pos": Vector2(690, 500)},
+				{"kind": &"gold", "pos": Vector2(748, 348)},
+				{"kind": &"risk", "pos": Vector2(840, 390)},
+				{"kind": &"normal", "pos": Vector2(910, 462)},
+				{"kind": &"normal", "pos": Vector2(1010, 332)}
+			]
+		},
+		{
+			"name": "Cross Book",
+			"biome": "Cross-table side ledger",
+			"board_id": &"bookie_slate",
+			"jackpot": &"E",
+			"risk": &"SW",
+			"shot_limit": 6,
+			"variant_rule": "East side pocket is hot; south-west corner is bad paper.",
+			"modifier_text": "Three short posts make the east side pay, but the corner debt is ugly.",
+			"bumpers": [
+				{"id": &"cross_post_a", "pos": Vector2(760, 338), "radius": 18.0},
+				{"id": &"cross_post_b", "pos": Vector2(820, 470), "radius": 18.0},
+				{"id": &"cross_post_c", "pos": Vector2(946, 408), "radius": 20.0}
+			],
+			"zones": [
+				{"id": &"corner_drag", "kind": &"sticky", "rect": Rect2(566, 430, 230, 70), "strength": 0.50}
+			],
+			"balls": [
+				{"kind": &"risk", "pos": Vector2(672, 408)},
+				{"kind": &"normal", "pos": Vector2(728, 348)},
+				{"kind": &"gold", "pos": Vector2(828, 500)},
+				{"kind": &"normal", "pos": Vector2(892, 376)},
+				{"kind": &"normal", "pos": Vector2(970, 456)},
+				{"kind": &"gold", "pos": Vector2(1000, 328)}
+			]
+		}
+	]
+	var picked: Dictionary = variants[rng.randi_range(0, variants.size() - 1)]
+	current_table["name"] = "Table Challenge Alley"
+	current_table["variant_name"] = String(picked.get("name", "Bookie Layout"))
+	current_table["biome"] = String(picked.get("biome", current_table.get("biome", "")))
+	current_table["board_id"] = picked.get("board_id", &"bookie_slate")
+	current_table["jackpot_pocket"] = picked.get("jackpot", current_table.get("jackpot_pocket", &"S"))
+	current_table["risk_pocket"] = picked.get("risk", &"")
+	current_table["shot_limit"] = int(picked.get("shot_limit", current_table.get("shot_limit", 6)))
+	current_table["variant_rule"] = String(picked.get("variant_rule", ""))
+	current_table["modifier_text"] = String(picked.get("modifier_text", current_table.get("modifier_text", "")))
+	current_table["objective_text"] = "Clear every object ball. The bookie's layout changes each visit."
+
+	var bumpers: Array = picked.get("bumpers", []).duplicate(true)
+	for bumper in bumpers:
+		if bumper is Dictionary and bumper.has("pos"):
+			bumper["pos"] = _jitter_table_position(bumper.get("pos", TABLE_RECT.get_center()), rng, 12, 10)
+	current_table["bumpers"] = bumpers
+
+	var zones: Array = picked.get("zones", []).duplicate(true)
+	current_table["zones"] = zones
+
+	var balls: Array = picked.get("balls", []).duplicate(true)
+	for ball in balls:
+		if ball is Dictionary and ball.has("pos"):
+			ball["pos"] = _jitter_table_position(ball.get("pos", TABLE_RECT.get_center()), rng, 18, 14)
+	current_table["balls"] = balls
 
 func _apply_run_contracts_to_current_table() -> void:
 	if run_contract_extra_shots > 0:
@@ -3806,7 +4517,7 @@ func _apply_cue_scoring_effects(summary) -> void:
 				summary.breakdown.append("Rail Baron: x1.22, +1 Style")
 			elif summary.has_successful_pot():
 				summary.final_score = int(summary.final_score * 0.88)
-				summary.breakdown.append("Rail Baron dislikes direct pots")
+				summary.breakdown.append("Rail Baron dislikes straight-in pots")
 		&"breakers_maul":
 			if table_shots_used == 1 and summary.moved_ball_count >= 5:
 				summary.final_score += 180
@@ -3816,6 +4527,11 @@ func _apply_cue_scoring_effects(summary) -> void:
 				var bonus: int = 150 * int(summary.perfect_pots)
 				summary.final_score += bonus
 				summary.breakdown.append("Dead-Eye Cue: +" + str(bonus))
+		&"seers_fork":
+			if summary.tags.has(&"RICOCHET_POT") or summary.tags.has(&"CAROM"):
+				summary.final_score += 120
+				summary.style_delta += 1
+				summary.breakdown.append("Seer's Fork indirect read: +120, +1 Style")
 		&"bookies_hook":
 			if summary.called_pocket_hits > 0:
 				summary.final_score += 120
@@ -3832,15 +4548,18 @@ func _apply_cue_scoring_effects(summary) -> void:
 				summary.breakdown.append("Chapel Bridge witness shot: +160, +1 Style")
 			elif summary.tags.has(&"SOFT_TOUCH"):
 				summary.final_score += 80
-				summary.breakdown.append("Chapel Bridge soft touch: +80")
+				summary.breakdown.append("Chapel Bridge gentle shot: +80")
+		&"free_hand":
+			if summary.scratch:
+				summary.breakdown.append("Free Hand: cue ball returns near your mouse")
 		&"eight_cane":
 			if summary.boss_damage > 0:
 				summary.final_score += 120
 				summary.style_delta += 1
-				summary.breakdown.append("Eight Cane anchor mark: +120, +1 Style")
+				summary.breakdown.append("Eight Cane anchor mark: +120 Rep, +1 Style")
 				if summary.potted_kinds.has(&"boss"):
 					summary.cash_delta += 8
-					summary.breakdown.append("Eight Cane final eight: +$8")
+					summary.breakdown.append("Eight Cane final eight: +$8 Bankroll")
 
 func _apply_board_scoring_effects(summary) -> void:
 	match selected_board_id:
@@ -3856,45 +4575,89 @@ func _apply_board_scoring_effects(summary) -> void:
 						gold_count += 1
 				var cash_bonus := gold_count * 3
 				summary.cash_delta += cash_bonus
-				summary.breakdown.append("Cashier Gold skim: +$" + str(cash_bonus))
+				summary.breakdown.append("Cashier Gold skim: +$" + str(cash_bonus) + " Bankroll")
 		&"bookie_slate":
 			if summary.tags.has(&"CALLED_POCKET"):
 				summary.final_score += 90
 				summary.cash_delta += 1
-				summary.breakdown.append("Bookie Slate called line: +90, +$1")
+				summary.breakdown.append("Bookie Slate called line: +90 Rep, +$1 Bankroll")
 		&"rain_glass":
 			if summary.tags.has(&"LONG_POT") and summary.tags.has(&"BANK"):
 				summary.final_score += 160
 				summary.cash_delta += 2
-				summary.breakdown.append("Rain Glass long bank: +160, +$2")
+				summary.breakdown.append("Rain Glass long cushion pot: +160 Rep, +$2 Bankroll")
 			elif summary.tags.has(&"LONG_POT"):
 				summary.final_score += 70
-				summary.breakdown.append("Rain Glass long read: +70")
+				summary.breakdown.append("Rain Glass long read: +70 Rep")
 		&"midnight_crypt":
 			if summary.boss_damage > 0:
 				summary.final_score += 110
-				summary.breakdown.append("Midnight Crypt anchor rite: +110")
+				summary.breakdown.append("Midnight Crypt anchor rite: +110 Rep")
 			elif _summary_has_risk_pot(summary):
 				summary.final_score += 120
-				summary.breakdown.append("Midnight Crypt risk rite: +120")
+				summary.breakdown.append("Midnight Crypt risk rite: +120 Rep")
 		&"house_vault":
 			if summary.tags.has(&"PERFECT_POT"):
 				summary.final_score += 120
-				summary.breakdown.append("House Vault perfect read: +120")
+				summary.breakdown.append("House Vault center entry: +120 Rep")
 			if summary.has_successful_pot() and not summary.scratch:
 				summary.final_score += 40
-				summary.breakdown.append("House Vault clean receipt: +40")
+				summary.breakdown.append("House Vault clean receipt: +40 Rep")
 
 func _apply_run_upgrade_scoring_effects(summary) -> void:
+	var break_mult := _shop_break_multiplier()
+	if run_shop_called_bounty > 0 and summary.tags.has(&"CALLED_POCKET"):
+		var called_score := 70 * run_shop_called_bounty * maxi(1, int(summary.called_pocket_hits)) * break_mult
+		var called_cash := run_shop_called_bounty * maxi(1, int(summary.called_pocket_hits)) * break_mult
+		summary.final_score += called_score
+		summary.cash_delta += called_cash
+		summary.breakdown.append("Grave Bet Slip x" + str(run_shop_called_bounty) + _break_mult_text() + ": +" + str(called_score) + " Rep, +$" + str(called_cash) + " Bankroll")
+	if run_shop_perfect_tithe > 0 and summary.tags.has(&"PERFECT_POT"):
+		var perfect_count := maxi(1, int(summary.perfect_pots))
+		var perfect_score := 110 * run_shop_perfect_tithe * perfect_count * break_mult
+		var perfect_cash := run_shop_perfect_tithe * perfect_count * break_mult
+		summary.final_score += perfect_score
+		summary.cash_delta += perfect_cash
+		summary.breakdown.append("Needle Tithe x" + str(run_shop_perfect_tithe) + _break_mult_text() + ": +" + str(perfect_score) + " Rep, +$" + str(perfect_cash) + " Bankroll")
+	if run_shop_rail_debt > 0 and (summary.tags.has(&"BANK") or summary.tags.has(&"KICK")):
+		var rail_score := 90 * run_shop_rail_debt * break_mult
+		var rail_cash := run_shop_rail_debt * break_mult
+		summary.final_score += rail_score
+		summary.cash_delta += rail_cash
+		summary.breakdown.append("Cushion Debt x" + str(run_shop_rail_debt) + _break_mult_text() + ": +" + str(rail_score) + " Rep, +$" + str(rail_cash) + " Bankroll")
+	if run_shop_cluster_tithe > 0 and (summary.tags.has(&"POWER_SHOT") or summary.tags.has(&"CLUSTER_BREAK")):
+		var cluster_score := 85 * run_shop_cluster_tithe * break_mult
+		var cluster_cash := (run_shop_cluster_tithe * break_mult) if summary.tags.has(&"CLUSTER_BREAK") else 0
+		summary.final_score += cluster_score
+		summary.cash_delta += cluster_cash
+		var cash_text := ", +$" + str(cluster_cash) + " Bankroll" if cluster_cash > 0 else ""
+		summary.breakdown.append("Rack Rite x" + str(run_shop_cluster_tithe) + _break_mult_text() + ": +" + str(cluster_score) + " Rep" + cash_text)
+	if run_shop_anchor_tax > 0 and summary.boss_damage > 0:
+		var anchor_score := 80 * run_shop_anchor_tax * break_mult
+		summary.final_score += anchor_score
+		summary.breakdown.append("Anchor Tax x" + str(run_shop_anchor_tax) + _break_mult_text() + ": +" + str(anchor_score) + " Rep")
+		if summary.potted_kinds.has(&"boss"):
+			var anchor_cash := 3 * run_shop_anchor_tax * break_mult
+			summary.cash_delta += anchor_cash
+			summary.breakdown.append("Anchor Tax final pocket: +$" + str(anchor_cash) + " Bankroll")
 	if run_contract_gold_skim > 0 and summary.potted_kinds.has(&"gold"):
 		var count := 0
 		for kind in summary.potted_kinds:
 			if kind == &"gold":
 				count += 1
-		var bonus := count * run_contract_gold_skim
+		var bonus := count * run_contract_gold_skim * break_mult
 		if bonus > 0:
 			summary.cash_delta += bonus
-			summary.breakdown.append("Gold Skim: +$" + str(bonus))
+			summary.breakdown.append("Gold Skim" + _break_mult_text() + ": +$" + str(bonus) + " Bankroll")
+
+func _shop_break_multiplier() -> int:
+	if run_shop_black_abacus <= 0:
+		return 1
+	return int(pow(2.0, float(mini(run_shop_black_abacus, 8))))
+
+func _break_mult_text() -> String:
+	var mult := _shop_break_multiplier()
+	return " x" + str(mult) if mult > 1 else ""
 
 func _summary_has_risk_pot(summary) -> bool:
 	if summary == null:
@@ -3920,11 +4683,13 @@ func _apply_risk_ball_penalties(summary: ShotSummary) -> void:
 	if run_curse_ward > 0:
 		run_curse_ward -= penalty
 		summary.breakdown.append("Risk Guard blocked " + str(penalty) + " marker loss")
-		_show_float("RISK GUARD", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 124), Color(0.72, 1.0, 0.88), 24)
+		if not summary.has_successful_pot():
+			_show_float("RISK GUARD", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 124), Color(0.72, 1.0, 0.88), 24)
 		return
 	summary.health_delta -= penalty
 	summary.breakdown.append(reason + ": -" + str(penalty) + " marker")
-	_show_float("RISK -" + str(penalty) + " MARKER", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 124), Color(1.0, 0.24, 0.46), 24)
+	if not summary.has_successful_pot():
+		_show_float("RISK -" + str(penalty) + " MARKER", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 124), Color(1.0, 0.24, 0.46), 24)
 
 func _risk_ball_disturbed_this_shot() -> bool:
 	for ball in _all_balls():
@@ -3984,6 +4749,12 @@ func _grant_table_unlocks(table_id: StringName) -> void:
 				_unlock_relic(id)
 
 func _table_unlock_defs(table_id: StringName) -> Array[Dictionary]:
+	if String(table_id).begins_with("gen_"):
+		return _generated_table_unlock_defs(String(table_id))
+	if table_id == &"lucien_final":
+		return [
+			{"type": &"cue", "id": &"eight_cane"}
+		]
 	match table_id:
 		&"corner_money":
 			return [
@@ -4019,10 +4790,12 @@ func _table_unlock_defs(table_id: StringName) -> Array[Dictionary]:
 			]
 		&"bankers_wake":
 			return [
+				{"type": &"cue", "id": &"seers_fork"},
 				{"type": &"relic", "id": &"long_glass"}
 			]
 		&"scratch_parlor":
 			return [
+				{"type": &"cue", "id": &"free_hand"},
 				{"type": &"relic", "id": &"hot_hand"},
 				{"type": &"relic", "id": &"blood_moon"}
 			]
@@ -4035,6 +4808,46 @@ func _table_unlock_defs(table_id: StringName) -> Array[Dictionary]:
 			return [
 				{"type": &"cue", "id": &"eight_cane"}
 			]
+	return []
+
+func _generated_table_unlock_defs(table_id: String) -> Array[Dictionary]:
+	var parts := table_id.split("_")
+	if parts.size() < 3:
+		return []
+	var biome := int(parts[1])
+	var stage := int(parts[2])
+	if biome == 0:
+		match stage:
+			1:
+				return [{"type": &"relic", "id": &"rail_coupon"}]
+			2:
+				return [{"type": &"cue", "id": &"dead_eye_cue"}, {"type": &"relic", "id": &"chalk_credit"}]
+			3:
+				return [{"type": &"cue", "id": &"rail_baron"}, {"type": &"relic", "id": &"spare_ball"}]
+			4:
+				return [{"type": &"cue", "id": &"eight_cane"}]
+	if biome == 1:
+		match stage:
+			0:
+				return [{"type": &"cue", "id": &"breakers_maul"}, {"type": &"relic", "id": &"combo_receipt"}]
+			1:
+				return [{"type": &"relic", "id": &"bumper_policy"}]
+			2:
+				return [{"type": &"cue", "id": &"seers_fork"}, {"type": &"relic", "id": &"long_glass"}]
+			4:
+				return [{"type": &"relic", "id": &"witching_well"}]
+	if biome == 2:
+		match stage:
+			0:
+				return [{"type": &"cue", "id": &"free_hand"}]
+			1:
+				return [{"type": &"relic", "id": &"grave_lantern"}]
+			2:
+				return [{"type": &"relic", "id": &"quiet_hands"}]
+			3:
+				return [{"type": &"relic", "id": &"salt_circle"}]
+			4:
+				return [{"type": &"relic", "id": &"blood_moon"}]
 	return []
 
 func _table_unlock_preview_text(table_id: StringName) -> String:
@@ -4116,6 +4929,12 @@ func _draw_ui_sprite(id: StringName, target: Rect2, modulate: Color = Color.WHIT
 		return
 	draw_texture_rect_region(UI_SPRITE_ATLAS, target, region, modulate)
 
+func _draw_ui_sprite_fit(id: StringName, target: Rect2, modulate: Color = Color.WHITE) -> void:
+	var region := _ui_region(id)
+	if region.size.x <= 0.0 or region.size.y <= 0.0:
+		return
+	draw_texture_rect_region(UI_SPRITE_ATLAS, _aspect_fit_rect(target, region), region, modulate)
+
 func _table_sprite_region(id: StringName) -> Rect2:
 	return TABLE_SPRITE_REGIONS.get(id, Rect2())
 
@@ -4124,6 +4943,82 @@ func _draw_table_sprite(id: StringName, target: Rect2, modulate: Color = Color.W
 	if region.size.x <= 0.0 or region.size.y <= 0.0:
 		return
 	draw_texture_rect_region(TABLE_SPRITE_ATLAS, target, region, modulate)
+
+func _draw_table_sprite_fit(id: StringName, target: Rect2, modulate: Color = Color.WHITE) -> void:
+	var region := _table_sprite_region(id)
+	if region.size.x <= 0.0 or region.size.y <= 0.0:
+		return
+	draw_texture_rect_region(TABLE_SPRITE_ATLAS, _aspect_fit_rect(target, region), region, modulate)
+
+func _prop_sprite_region(id: StringName) -> Rect2:
+	return PROP_SPRITE_REGIONS.get(id, Rect2())
+
+func _store_sprite_region(id: StringName) -> Rect2:
+	return STORE_SPRITE_REGIONS.get(id, Rect2())
+
+func _draw_prop_sprite(id: StringName, target: Rect2, modulate: Color = Color.WHITE) -> void:
+	var region := _prop_sprite_region(id)
+	if region.size.x <= 0.0 or region.size.y <= 0.0:
+		return
+	draw_texture_rect_region(PROP_SPRITE_ATLAS, target, region, modulate)
+
+func _draw_prop_sprite_fit(id: StringName, target: Rect2, modulate: Color = Color.WHITE) -> void:
+	var region := _prop_sprite_region(id)
+	if region.size.x <= 0.0 or region.size.y <= 0.0:
+		return
+	draw_texture_rect_region(PROP_SPRITE_ATLAS, _aspect_fit_rect(target, region), region, modulate)
+
+func _draw_table_sprite_tiled(id: StringName, target: Rect2, modulate: Color = Color.WHITE, tile_height: float = 0.0) -> void:
+	var region := _table_sprite_region(id)
+	if region.size.x <= 0.0 or region.size.y <= 0.0 or target.size.x <= 0.0 or target.size.y <= 0.0:
+		return
+	var draw_tile_h := target.size.y if tile_height <= 0.0 else minf(tile_height, target.size.y)
+	var scale := draw_tile_h / region.size.y
+	if scale <= 0.0:
+		return
+	var draw_tile_w := region.size.x * scale
+	var y := target.position.y
+	while y < target.end.y - 0.01:
+		var draw_h := minf(draw_tile_h, target.end.y - y)
+		var x := target.position.x
+		while x < target.end.x - 0.01:
+			var draw_w := minf(draw_tile_w, target.end.x - x)
+			var source := Rect2(region.position, Vector2(draw_w / scale, draw_h / scale))
+			draw_texture_rect_region(TABLE_SPRITE_ATLAS, Rect2(Vector2(x, y), Vector2(draw_w, draw_h)), source, modulate)
+			x += draw_tile_w
+		y += draw_tile_h
+
+func _draw_ui_sprite_tiled(id: StringName, target: Rect2, modulate: Color = Color.WHITE, tile_height: float = 0.0) -> void:
+	var region := _ui_region(id)
+	if region.size.x <= 0.0 or region.size.y <= 0.0 or target.size.x <= 0.0 or target.size.y <= 0.0:
+		return
+	var draw_tile_h := target.size.y if tile_height <= 0.0 else minf(tile_height, target.size.y)
+	var scale := draw_tile_h / region.size.y
+	if scale <= 0.0:
+		return
+	var draw_tile_w := region.size.x * scale
+	var y := target.position.y
+	while y < target.end.y - 0.01:
+		var draw_h := minf(draw_tile_h, target.end.y - y)
+		var x := target.position.x
+		while x < target.end.x - 0.01:
+			var draw_w := minf(draw_tile_w, target.end.x - x)
+			var source := Rect2(region.position, Vector2(draw_w / scale, draw_h / scale))
+			draw_texture_rect_region(UI_SPRITE_ATLAS, Rect2(Vector2(x, y), Vector2(draw_w, draw_h)), source, modulate)
+			x += draw_tile_w
+		y += draw_tile_h
+
+func _aspect_fit_rect(target: Rect2, region: Rect2) -> Rect2:
+	if target.size.x <= 0.0 or target.size.y <= 0.0 or region.size.x <= 0.0 or region.size.y <= 0.0:
+		return target
+	var source_aspect := region.size.x / region.size.y
+	var target_aspect := target.size.x / target.size.y
+	var size := target.size
+	if target_aspect > source_aspect:
+		size.x = target.size.y * source_aspect
+	else:
+		size.y = target.size.x / source_aspect
+	return Rect2(target.position + (target.size - size) * 0.5, size)
 
 func _draw_rotated_table_sprite(id: StringName, origin: Vector2, rotation: float, target: Rect2, modulate: Color = Color.WHITE) -> void:
 	var region := _table_sprite_region(id)
@@ -4138,6 +5033,31 @@ func _ui_atlas_texture(id: StringName) -> AtlasTexture:
 	texture.atlas = UI_SPRITE_ATLAS
 	texture.region = _ui_region(id)
 	return texture
+
+func _store_atlas_texture(id: StringName) -> AtlasTexture:
+	var texture := AtlasTexture.new()
+	texture.atlas = STORE_SPRITE_ATLAS
+	texture.region = _store_sprite_region(id)
+	return texture
+
+func _set_shop_button_sprite(button: Button, id: StringName, size: Vector2) -> void:
+	var icon := button.get_node_or_null("ShopIcon") as TextureRect
+	if icon == null:
+		icon = TextureRect.new()
+		icon.name = "ShopIcon"
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		button.add_child(icon)
+	icon.texture = _store_atlas_texture(id)
+	icon.visible = true
+	icon.position = Vector2(10, maxf(4.0, (button.custom_minimum_size.y - size.y) * 0.5))
+	icon.size = size
+
+func _hide_shop_button_sprite(button: Button) -> void:
+	var icon := button.get_node_or_null("ShopIcon") as TextureRect
+	if icon != null:
+		icon.visible = false
 
 func _new_ui_icon(id: StringName, size: Vector2) -> TextureRect:
 	var icon := TextureRect.new()
@@ -4234,8 +5154,10 @@ func _build_chalk_panel() -> void:
 
 	var title := _new_label("Chalk Sigils", 20, Color(0.62, 0.94, 1.0))
 	box.add_child(title)
+	var hint := _new_label("Click one to arm NEXT shot.", 12, Color(0.74, 0.88, 1.0, 0.86))
+	box.add_child(hint)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(306, 88)
+	scroll.custom_minimum_size = Vector2(306, 68)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	box.add_child(scroll)
@@ -4304,6 +5226,18 @@ func _build_reward_panel() -> void:
 		button.pressed.connect(_on_reward_button_pressed.bind(i))
 		reward_buttons.append(button)
 		box.add_child(button)
+	shop_reroll_button = Button.new()
+	shop_reroll_button.custom_minimum_size = Vector2(820, 52)
+	_set_button_font_size(shop_reroll_button, 19)
+	shop_reroll_button.text = ""
+	shop_reroll_button.visible = false
+	shop_reroll_button.icon = _store_atlas_texture(&"reroll_token")
+	shop_reroll_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	shop_reroll_button.expand_icon = true
+	shop_reroll_button.add_theme_constant_override("icon_max_width", 42)
+	shop_reroll_button.add_theme_constant_override("h_separation", 12)
+	shop_reroll_button.pressed.connect(_on_shop_reroll_pressed)
+	box.add_child(shop_reroll_button)
 	continue_button = Button.new()
 	continue_button.custom_minimum_size = Vector2(820, 68)
 	_set_button_font_size(continue_button, 26)
@@ -4325,6 +5259,8 @@ func _set_button_font_size(button: Button, size: int) -> void:
 
 func _start_run(is_practice: bool = false, table_limit: int = 0) -> void:
 	run_active = true
+	if menu_art_background != null:
+		menu_art_background.visible = false
 	menu_panel.visible = false
 	practice_run = is_practice
 	if practice_run:
@@ -4354,6 +5290,13 @@ func _start_run(is_practice: bool = false, table_limit: int = 0) -> void:
 	run_contract_score_ease = 0.0
 	run_contract_extra_shots = 0
 	run_contract_gold_skim = 0
+	run_shop_called_bounty = 0
+	run_shop_rail_debt = 0
+	run_shop_perfect_tithe = 0
+	run_shop_cluster_tithe = 0
+	run_shop_dare_lure = 0
+	run_shop_anchor_tax = 0
+	run_shop_black_abacus = 0
 	run_curse_ward = 0
 	table_index = selected_practice_table if practice_run else 0
 	relic_ids = [&"money_ball"]
@@ -4364,6 +5307,8 @@ func _start_run(is_practice: bool = false, table_limit: int = 0) -> void:
 	run_new_relic_ids.clear()
 	run_cue_work_ids.clear()
 	run_contract_ids.clear()
+	current_shop_offers.clear()
+	shop_rerolls_this_table = 0
 	chain_heat_ready = false
 	active_shot_chain_heat = false
 	scoring_fire_ball_ids.clear()
@@ -4380,6 +5325,7 @@ func _load_table(index: int) -> void:
 		return
 
 	current_table = tables[index].duplicate(true)
+	_apply_table_variant(index)
 	furthest_table_reached = maxi(furthest_table_reached, index)
 	selected_practice_table = clampi(selected_practice_table, 0, furthest_table_reached)
 	_save_progress()
@@ -4394,6 +5340,8 @@ func _load_table(index: int) -> void:
 	table_challenge.clear()
 	table_challenge_offers.clear()
 	shop_purchased_ids.clear()
+	current_shop_offers.clear()
+	shop_rerolls_this_table = 0
 	table_shots_used = 0
 	cleared_table_fast_resolve_timer = -1.0
 	table_notes.clear()
@@ -4424,9 +5372,11 @@ func _load_table(index: int) -> void:
 	_apply_meta_table_refill()
 	shot_id = 0
 	boss_health = int(current_table.get("boss_health", 0))
+	boss_special_hits = 0
 	boss_vulnerable = false
 	boss_potted = false
 	boss_ball = null
+	glass_break_failed = false
 	firecracker_used = false
 	gold_potted_this_table = 0
 	potted_count_this_table = 0
@@ -4493,7 +5443,7 @@ func _hustler_table_intro_text() -> String:
 
 func _hustler_table_footer_text(table_def: Dictionary) -> String:
 	if not practice_run and not browser_pocket_test_enabled and not browser_aim_test_enabled and not browser_run_test_enabled:
-		return "Challenge: win bonus; 2 misses = -1 marker."
+		return "Challenge: clear dares to refill marks; Double Dare halves marks on a miss."
 	return ""
 
 func _show_table_challenge_offer() -> bool:
@@ -4535,8 +5485,8 @@ func _apply_cash_delta(amount: int) -> void:
 
 func _cash_status_text() -> String:
 	if run_debt > 0:
-		return "$" + str(run_cash) + " | Debt $" + str(run_debt)
-	return "$" + str(run_cash)
+		return "Bankroll $" + str(run_cash) + " | Debt $" + str(run_debt)
+	return "Bankroll $" + str(run_cash)
 
 func _cycle_side_bet() -> void:
 	current_side_bet = &""
@@ -4552,7 +5502,7 @@ func _side_bet_name(id: StringName) -> String:
 		&"called":
 			return "Called Pocket"
 		&"bank":
-			return "Bank/Kick"
+			return "Cushion Route"
 		&"gold":
 			return "Gold Ball"
 		&"multi":
@@ -4677,7 +5627,8 @@ func _build_rails() -> void:
 	for data in corner_backstop_rects:
 		var body := StaticBody2D.new()
 		body.name = "CornerBackstop_" + String(data["id"])
-		body.add_to_group("backstop")
+		body.add_to_group("rail")
+		body.set_meta("rail_id", data["id"])
 		var material := PhysicsMaterial.new()
 		material.friction = 0.20
 		material.bounce = 0.12
@@ -4704,7 +5655,8 @@ func _build_rails() -> void:
 	for data in backstop_rects:
 		var body := StaticBody2D.new()
 		body.name = "Backstop_" + String(data["id"])
-		body.add_to_group("backstop")
+		body.add_to_group("rail")
+		body.set_meta("rail_id", data["id"])
 		var material := PhysicsMaterial.new()
 		material.friction = 0.18
 		material.bounce = 0.18
@@ -4773,7 +5725,7 @@ func _build_pockets() -> void:
 			tint = Color(1.0, 0.82, 0.08)
 		elif _table_risk_pocket(current_table) == data["id"]:
 			tint = Color(1.0, 0.16, 0.34)
-		pocket.setup(data["id"], _board_pocket_sensor_radius(), tint, self)
+		pocket.setup(data["id"], _board_pocket_sensor_radius(), tint, self, _board_pocket_visual_radius(), _web_query_has_flag("pocket_debug"))
 		pockets.add_child(pocket)
 
 func _build_table_obstacles() -> void:
@@ -4792,6 +5744,26 @@ func _build_table_obstacles() -> void:
 		shape.radius = float(data.get("radius", 24.0))
 		var collider := CollisionShape2D.new()
 		collider.shape = shape
+		body.add_child(collider)
+		body.collision_layer = 2
+		body.collision_mask = 1
+		obstacles.add_child(body)
+	var barrier_defs: Array = current_table.get("barriers", [])
+	for data in barrier_defs:
+		var body := StaticBody2D.new()
+		body.name = "PocketBarrier_" + String(data.get("id", &"barrier"))
+		body.add_to_group("rail")
+		body.set_meta("rail_id", data.get("id", &"barrier"))
+		var material := PhysicsMaterial.new()
+		material.friction = minf(0.32, _board_rail_friction() + 0.10)
+		material.bounce = _board_jaw_bounce()
+		body.physics_material_override = material
+		var rect: Rect2 = data.get("rect", Rect2(TABLE_RECT.get_center(), Vector2(28, 12)))
+		var shape := RectangleShape2D.new()
+		shape.size = rect.size
+		var collider := CollisionShape2D.new()
+		collider.shape = shape
+		collider.position = rect.position + rect.size * 0.5
 		body.add_child(collider)
 		body.collision_layer = 2
 		body.collision_mask = 1
@@ -4842,6 +5814,8 @@ func _spawn_ball(spec: Dictionary):
 		mass = 3.2
 	elif kind == &"bomb":
 		mass = 1.15
+	elif kind == &"glass":
+		mass = 0.9
 	var ball := PoolBall.new()
 	balls.add_child(ball)
 	var spawn_pos: Vector2 = _safe_spawn_position(spec.get("pos", CUE_START), radius)
@@ -4855,7 +5829,8 @@ func _spawn_ball(spec: Dictionary):
 		"color": spec.get("color", color),
 		"mass": mass,
 		"damp": _damp_for_table(),
-		"marked": spec.get("marked", false)
+		"marked": spec.get("marked", false),
+		"glass_break_limit": spec.get("glass_break_limit", 3)
 	}, self)
 	if kind == &"boss":
 		boss_ball = ball
@@ -4914,6 +5889,8 @@ func _color_for_kind(kind: StringName) -> Color:
 			return Color(1.0, 0.68, 0.08)
 		&"bomb":
 			return Color(0.09, 0.08, 0.08)
+		&"glass":
+			return Color(0.68, 1.0, 1.0)
 		&"boss":
 			return Color(0.015, 0.012, 0.02)
 		_:
@@ -4928,6 +5905,8 @@ func _score_for_kind(kind: StringName) -> int:
 			return 160
 		&"bomb":
 			return 140
+		&"glass":
+			return 260
 		&"boss":
 			return 700
 		_:
@@ -4950,6 +5929,8 @@ func _display_name_for_kind(kind: StringName) -> String:
 			return "Gold Ball"
 		&"bomb":
 			return "Bomb Ball"
+		&"glass":
+			return "Glass Ball"
 		&"boss":
 			return "Lucien's Anchor Eight"
 		_:
@@ -4957,23 +5938,25 @@ func _display_name_for_kind(kind: StringName) -> String:
 
 func _explanation_for_kind(kind: StringName) -> String:
 	if _is_risk_ball_kind(kind):
-		return "Premium target. Pots for extra score and cash, but a scratch while potting it or any no-pot shot after disturbing it costs +1 marker."
+		return "Premium target. Pots for extra Reputation and Bankroll, but a scratch while potting it or any no-pot shot after disturbing it costs +1 marker."
 	match kind:
 		&"cue":
 			return "Scratch risk. Cue drop costs 1 soul marker unless the shot pots 2+ balls."
 		&"gold":
-			return "Pays extra cash when potted."
+			return "Pays extra Bankroll when potted."
 		&"bomb":
 			return "Potted or hard-hit bombs blast nearby balls."
+		&"glass":
+			return "Fragile premium ball. It shows cracks after each bad hit; a fourth hit before potting shatters it and ends the run."
 		&"boss":
-			return "Lucien's soul-anchor. Break shield, damage with impacts, then call and pot while vulnerable."
+			return "Lucien's soul-anchor. Break shield, damage with impacts, then pot while vulnerable."
 		_:
 			return ""
 
 func _ball_uses_hover_tooltip(ball) -> bool:
 	if ball == null or not is_instance_valid(ball) or ball.potted:
 		return false
-	if ball.kind == &"cue" or ball.kind == &"gold" or _is_risk_ball_kind(ball.kind) or ball.kind == &"bomb" or ball.kind == &"boss":
+	if ball.kind == &"cue" or ball.kind == &"gold" or _is_risk_ball_kind(ball.kind) or ball.kind == &"bomb" or ball.kind == &"glass" or ball.kind == &"boss":
 		return true
 	return bool(ball.marked)
 
@@ -5029,6 +6012,8 @@ func _update_ball_tooltip() -> void:
 			body += " | Shield " + str(_boss_shield_remaining())
 		elif boss_vulnerable:
 			body += " | Vulnerable"
+	if hovered_ball.kind == &"glass":
+		body += "\nCracks " + str(hovered_ball.glass_hits) + "/" + str(hovered_ball.glass_break_limit)
 	tooltip_body.text = body
 
 func _damp_for_table() -> float:
@@ -5055,6 +6040,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.keycode == KEY_D:
 			_print_debug_report()
 			return
+		if lucien_dare_offer_pending:
+			match event.keycode:
+				KEY_ENTER, KEY_KP_ENTER, KEY_1:
+					_accept_lucien_dare(false)
+					return
+				KEY_R, KEY_2:
+					_accept_lucien_dare(true)
+					return
+			return
 		if _consume_table_intro_input(event):
 			return
 		if state == State.AIMING or state == State.CHARGING_SHOT:
@@ -5075,22 +6069,25 @@ func _unhandled_input(event: InputEvent) -> void:
 					_reset_cue_spin()
 					return
 				KEY_C:
-					_toggle_call_pocket_mode()
+					if _call_pocket_dare_active():
+						_toggle_call_pocket_mode()
 					return
 
 	if state != State.AIMING and state != State.CHARGING_SHOT:
 		return
 	if pause_panel.visible:
 		return
+	if lucien_dare_offer_pending:
+		return
 	if _consume_table_intro_input(event):
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed and state == State.AIMING:
 			var mouse_pos := get_global_mouse_position()
-			if _call_pocket_button_rect().has_point(mouse_pos):
+			if _call_pocket_dare_active() and _call_pocket_button_rect().has_point(mouse_pos):
 				_toggle_call_pocket_mode()
 				return
-			if calling_pocket_mode:
+			if calling_pocket_mode and _call_pocket_dare_active():
 				_set_called_pocket_from_position(mouse_pos)
 				calling_pocket_mode = false
 				_update_hud()
@@ -5100,7 +6097,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			charge_dir = 1.0
 		elif not event.pressed and state == State.CHARGING_SHOT:
 			_fire_shot()
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _call_pocket_dare_active():
 		_set_called_pocket_from_mouse()
 		return
 
@@ -5159,7 +6156,6 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
-	_simulate_pocket_mouths(delta)
 	_capture_committed_pocket_entries(delta)
 	_handle_out_of_bounds_balls()
 	_apply_table_zone_effects(delta)
@@ -5196,51 +6192,7 @@ func _shot_objective_cleared_during_motion() -> bool:
 		return boss_potted
 	return _remaining_required_balls() == 0
 
-func _simulate_pocket_mouths(delta: float) -> void:
-	if state != State.SHOT_IN_MOTION:
-		return
-	for ball in _active_balls():
-		if ball.potted:
-			continue
-		var pocket = _nearest_pocket(ball.global_position)
-		if pocket == null:
-			continue
-		var local := _pocket_local_position(ball.global_position, pocket)
-		var depth := float(local.get("depth", 9999.0))
-		var lateral := float(local.get("lateral", 9999.0))
-		var half_width := _pocket_mouth_half_width(pocket)
-		if depth > POCKET_MOUTH_DEPTH + BALL_RADIUS or depth < -POCKET_CUP_DEPTH * 2.2:
-			continue
-		if absf(lateral) > half_width + POCKET_LIP_SOFT_ZONE + BALL_RADIUS * 0.35:
-			continue
-		var inward := _pocket_inward_axis(pocket)
-		var tangent := _pocket_tangent_axis(pocket)
-		var velocity: Vector2 = ball.linear_velocity
-		var into_speed := -velocity.dot(inward)
-		var lateral_speed := velocity.dot(tangent)
-		var abs_lateral := absf(lateral)
-		var shelf_start := _pocket_fall_depth(pocket) + BALL_RADIUS * 1.15
-
-		if not _pocket_capture_is_blocked(ball, pocket) and _ball_has_entered_pocket_cup(ball, pocket, local):
-			on_pocket_entered(ball, pocket, true)
-			continue
-
-		if abs_lateral > half_width:
-			continue
-
-		if depth > shelf_start:
-			continue
-		if into_speed <= -35.0:
-			continue
-		var mouth_t: float = clampf(1.0 - depth / maxf(1.0, shelf_start), 0.0, 1.0)
-		var center_t: float = clampf(1.0 - abs_lateral / maxf(1.0, half_width), 0.0, 1.0)
-		var cup_pull: Vector2 = pocket.global_position - ball.global_position
-		var cup_dir: Vector2 = cup_pull.normalized() if cup_pull.length_squared() > 0.01 else -inward
-		var correction: Vector2 = -tangent * lateral_speed * (0.035 + 0.10 * mouth_t) * center_t
-		var pull: Vector2 = cup_dir * POCKET_FUNNEL_ACCEL * delta * mouth_t * center_t
-		ball.linear_velocity += correction + pull
-
-func _capture_committed_pocket_entries(delta: float) -> void:
+func _capture_committed_pocket_entries(_delta: float) -> void:
 	if state != State.SHOT_IN_MOTION:
 		return
 	for ball in _active_balls():
@@ -5249,12 +6201,6 @@ func _capture_committed_pocket_entries(delta: float) -> void:
 		var current_pos: Vector2 = ball.global_position
 		var previous_pos: Vector2 = pocket_trace_positions.get(ball.ball_id, current_pos)
 		var pocket = _pocket_crossed_by_motion(ball, previous_pos, current_pos)
-		if pocket == null:
-			var speed: float = ball.linear_velocity.length()
-			if speed > 18.0:
-				var lookahead := clampf(speed * 0.10, BALL_RADIUS * 1.1, _board_pocket_throat_radius() * 0.86)
-				var projected_pos: Vector2 = current_pos + ball.linear_velocity.normalized() * lookahead
-				pocket = _pocket_crossed_by_motion(ball, current_pos, projected_pos)
 		if pocket != null:
 			on_pocket_entered(ball, pocket, true)
 			continue
@@ -5317,9 +6263,9 @@ func _motion_has_clean_pocket_entry(ball, pocket, previous_pos: Vector2, current
 	return alignment >= 0.82 and lateral_error <= allowance
 
 func _pocket_mouth_half_width(pocket) -> float:
-	var base := BALL_RADIUS * (1.72 if _is_corner_pocket(pocket.pocket_id) else 1.50)
+	var base := BALL_RADIUS * (1.42 if _is_corner_pocket(pocket.pocket_id) else 1.30)
 	var board_scale := clampf(float(_board_def(selected_board_id).get("pocket_capture", 1.0)), 0.88, 1.06)
-	return base * board_scale
+	return base * board_scale * _table_pocket_scale()
 
 func _pocket_fall_depth(pocket) -> float:
 	return POCKET_CUP_DEPTH if _is_corner_pocket(pocket.pocket_id) else POCKET_CUP_DEPTH + BALL_RADIUS * 0.32
@@ -5327,7 +6273,7 @@ func _pocket_fall_depth(pocket) -> float:
 func _pocket_fall_half_width(pocket, speed: float) -> float:
 	var base := _pocket_mouth_half_width(pocket)
 	var speed_t := clampf((speed - 170.0) / 520.0, 0.0, 1.0)
-	var shelf_scale := lerpf(1.18, 0.76 if _is_corner_pocket(pocket.pocket_id) else 0.84, speed_t)
+	var shelf_scale := lerpf(1.04, 0.70 if _is_corner_pocket(pocket.pocket_id) else 0.78, speed_t)
 	return base * shelf_scale
 
 func _is_slow_roll_inside_pocket_facing(ball, pocket, local: Dictionary = {}) -> bool:
@@ -5337,10 +6283,10 @@ func _is_slow_roll_inside_pocket_facing(ball, pocket, local: Dictionary = {}) ->
 	if speed > 150.0:
 		return false
 	var depth := float(local.get("depth", 9999.0))
-	if depth > POCKET_MOUTH_DEPTH * 0.82 or depth < -_pocket_fall_depth(pocket):
+	if depth > _pocket_fall_depth(pocket) + BALL_RADIUS * 0.40 or depth < -_pocket_fall_depth(pocket):
 		return false
 	var lateral := absf(float(local.get("lateral", 9999.0)))
-	if lateral > _pocket_fall_half_width(pocket, speed):
+	if lateral > _pocket_mouth_half_width(pocket) * 0.92:
 		return false
 	var inward := _pocket_inward_axis(pocket)
 	var into_speed: float = -ball.linear_velocity.dot(inward)
@@ -5375,21 +6321,21 @@ func _pocket_local_position(point: Vector2, pocket) -> Dictionary:
 func _ball_has_entered_pocket_cup(ball, pocket, local: Dictionary = {}) -> bool:
 	if local.is_empty():
 		local = _pocket_local_position(ball.global_position, pocket)
-	if _is_slow_roll_inside_pocket_facing(ball, pocket, local):
-		return true
 	var depth := float(local.get("depth", 9999.0))
 	var lateral := absf(float(local.get("lateral", 9999.0)))
 	var speed: float = ball.linear_velocity.length()
 	var half_width := _pocket_fall_half_width(pocket, speed)
 	if depth > _pocket_fall_depth(pocket):
 		return false
+	if depth < -_pocket_fall_depth(pocket) - BALL_RADIUS * 0.35:
+		return false
 	if lateral > half_width:
 		return false
-	if ball.global_position.distance_to(pocket.global_position) > _board_pocket_capture_radius() + BALL_RADIUS * 0.30:
+	if ball.global_position.distance_to(pocket.global_position) > _board_pocket_capture_radius():
 		return false
 	var inward: Vector2 = _pocket_inward_axis(pocket)
 	var into_speed: float = -ball.linear_velocity.dot(inward)
-	return into_speed > -42.0 or depth <= 2.0
+	return into_speed > -24.0 or depth <= 0.0
 
 func _ball_is_in_pocket_drop_chute(ball, pocket, local: Dictionary = {}) -> bool:
 	if local.is_empty():
@@ -5401,9 +6347,9 @@ func _ball_is_in_pocket_drop_chute(ball, pocket, local: Dictionary = {}) -> bool
 	if depth < -POCKET_MOUTH_DEPTH:
 		return false
 	var lateral := absf(float(local.get("lateral", 9999.0)))
-	if lateral > _pocket_fall_half_width(pocket, speed) + BALL_RADIUS * 0.22:
+	if lateral > _pocket_fall_half_width(pocket, speed) + BALL_RADIUS * 0.08:
 		return false
-	if ball.global_position.distance_to(pocket.global_position) > _board_pocket_throat_radius() + BALL_RADIUS * 0.85:
+	if ball.global_position.distance_to(pocket.global_position) > _board_pocket_throat_radius() + BALL_RADIUS * 0.42:
 		return false
 	var inward := _pocket_inward_axis(pocket)
 	var into_speed: float = -ball.linear_velocity.dot(inward)
@@ -5416,7 +6362,7 @@ func _is_clear_pocket_mouth_entry(ball, pocket) -> bool:
 		return false
 	var speed: float = ball.linear_velocity.length()
 	var lateral := absf(float(local.get("lateral", 9999.0)))
-	if lateral > _pocket_fall_half_width(pocket, speed) + BALL_RADIUS * 0.32:
+	if lateral > _pocket_fall_half_width(pocket, speed) + BALL_RADIUS * 0.10:
 		return false
 	var inward := _pocket_inward_axis(pocket)
 	var into_speed: float = -ball.linear_velocity.dot(inward)
@@ -5670,10 +6616,10 @@ func _draw_score_trails() -> void:
 	if score_side_feed.is_empty():
 		return
 	var visible_count := mini(score_side_feed.size(), 5)
-	var panel := Rect2(TABLE_RECT.position + Vector2(-94.0, 138.0), Vector2(178.0, 34.0 + visible_count * 24.0))
+	var panel := Rect2(TABLE_RECT.position + Vector2(-190.0, 154.0), Vector2(124.0, 34.0 + visible_count * 24.0))
 	draw_rect(panel, Color(0.008, 0.006, 0.012, 0.76))
 	draw_rect(panel, Color(1.0, 0.78, 0.24, 0.36), false, 2.0)
-	draw_string(font, panel.position + Vector2(12.0, 22.0), "Shot Score", HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 24.0, 13, Color(1.0, 0.88, 0.42, 0.88))
+	draw_string(font, panel.position + Vector2(12.0, 22.0), "Shot Rep", HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 24.0, 13, Color(1.0, 0.88, 0.42, 0.88))
 	for i in range(visible_count):
 		var item: Dictionary = score_side_feed[score_side_feed.size() - 1 - i]
 		var ttl := float(item.get("ttl", 0.0))
@@ -5681,8 +6627,8 @@ func _draw_score_trails() -> void:
 		var t := clampf(ttl / life, 0.0, 1.0)
 		var color: Color = item.get("color", Color(0.72, 1.0, 0.58))
 		var y := panel.position.y + 46.0 + i * 23.0
-		draw_circle(panel.position + Vector2(14.0, y - 5.0), 4.5, Color(color.r, color.g, color.b, 0.24 + 0.36 * t))
-		draw_string(font, panel.position + Vector2(26.0, y), String(item.get("text", "")), HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 34.0, 13, Color(color.r, color.g, color.b, 0.55 + 0.40 * t))
+		draw_circle(Vector2(panel.position.x + 14.0, y - 5.0), 4.5, Color(color.r, color.g, color.b, 0.24 + 0.36 * t))
+		draw_string(font, Vector2(panel.position.x + 24.0, y), String(item.get("text", "")), HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 30.0, 11, Color(color.r, color.g, color.b, 0.55 + 0.40 * t))
 
 func _has_live_travel_trails() -> bool:
 	if state != State.SHOT_IN_MOTION:
@@ -5756,15 +6702,11 @@ func _handle_out_of_bounds_balls() -> void:
 			if moving_pocket != null and _can_capture_pocket(ball, moving_pocket, true):
 				on_pocket_entered(ball, moving_pocket, true)
 			continue
-		if _guard_corner_pocket_escape(ball):
-			continue
 		var pocket = _nearest_pocket(ball.global_position)
 		if state == State.SHOT_IN_MOTION and pocket != null and _can_capture_pocket(ball, pocket, true):
 			on_pocket_entered(ball, pocket, true)
-		elif not soft_bounds.has_point(ball.global_position) or not hard_bounds.has_point(ball.global_position):
-			_return_ball_to_table(ball)
-		else:
-			_return_ball_to_table(ball)
+		elif not hard_bounds.has_point(ball.global_position):
+			_nudge_tunneled_ball_toward_table(ball)
 
 func _should_contain_balls() -> bool:
 	return state == State.AIMING or state == State.CHARGING_SHOT or state == State.SHOT_IN_MOTION or state == State.SHOT_RESOLVING
@@ -5886,6 +6828,8 @@ func _fire_shot() -> void:
 	if cue_ball == null or cue_ball.potted:
 		return
 	calling_pocket_mode = false
+	if not _call_pocket_dare_active():
+		_clear_called_pocket()
 	if table_intro_panel != null:
 		table_intro_panel.visible = false
 	table_intro_seconds = 0.0
@@ -6011,6 +6955,10 @@ func on_ball_body_contact(ball, body: Node, speed: float) -> void:
 		_play_audio_cue(&"ball_hit", clampf(speed / 700.0, 0.15, 1.0))
 		if ball.kind == &"boss" or other.kind == &"boss":
 			_damage_boss_for_hit(ball, other, speed)
+		if ball.kind == &"glass":
+			_damage_glass_ball(ball, speed)
+		if other.kind == &"glass":
+			_damage_glass_ball(other, speed)
 		if ball.kind == &"bomb" and speed > 520.0:
 			_explode_ball(ball)
 		elif other.kind == &"bomb" and speed > 520.0:
@@ -6018,7 +6966,7 @@ func on_ball_body_contact(ball, body: Node, speed: float) -> void:
 	elif body.is_in_group("rail"):
 		var rail_id: StringName = body.get_meta("rail_id", &"rail")
 		var pocket = _nearest_pocket(ball.global_position)
-		if pocket != null and (_is_clear_pocket_mouth_entry(ball, pocket) or _is_committed_to_pocket(ball, pocket) or _motion_crosses_pocket_mouth(ball, pocket, pocket_trace_positions.get(ball.ball_id, ball.global_position), ball.global_position)):
+		if pocket != null and (_is_committed_to_pocket(ball, pocket) or _motion_crosses_pocket_mouth(ball, pocket, pocket_trace_positions.get(ball.ball_id, ball.global_position), ball.global_position)):
 			on_pocket_entered(ball, pocket, true)
 			return
 		current_log.add_event(GameplayEvent.new(GameplayEvent.Type.RAIL_HIT, shot_id, {
@@ -6037,12 +6985,6 @@ func on_ball_body_contact(ball, body: Node, speed: float) -> void:
 			ball.linear_velocity *= 1.18
 			ball.angular_velocity *= 1.08
 			_show_float("RAIL CHALK", ball.global_position + Vector2(0, -34), Color(0.62, 0.9, 1.0), 17)
-	elif body.is_in_group("backstop"):
-		var pocket = _nearest_pocket(ball.global_position)
-		if pocket != null and (_is_committed_to_pocket(ball, pocket) or _motion_crosses_pocket_mouth(ball, pocket, pocket_trace_positions.get(ball.ball_id, ball.global_position), ball.global_position)):
-			on_pocket_entered(ball, pocket, true)
-		else:
-			_return_ball_to_table(ball)
 	elif body.is_in_group("bumper"):
 		var away: Vector2 = (ball.global_position - body.global_position).normalized()
 		if away.length() <= 0.01:
@@ -6168,11 +7110,9 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 		"ricochet": ricochet_pot,
 		"chain": chain_pot
 	}, pocket.global_position))
-	_show_float(_pot_text(ball), pocket.global_position + Vector2(0, -28), _color_for_kind(ball.kind), 23)
 	if travel_score > 0:
 		var trail_intensity := 1.0 + float(maxi(0, same_shot_chain_index - 1)) * 0.22 + clampf(float(travel_score) / 300.0, 0.0, 1.0) * 0.82
 		_spawn_score_trail(ball.ball_id, pocket.global_position, travel_score, _color_for_kind(ball.kind).lerp(Color(0.75, 1.0, 0.58), 0.48), false, trail_intensity)
-		_show_float("TRAVEL +" + str(travel_score), pocket.global_position + Vector2(0, -104), Color(0.74, 1.0, 0.58), 19 + maxi(0, same_shot_chain_index - 1))
 		if travel_score >= 90:
 			_spawn_pulse(pocket.global_position, Color(0.72, 1.0, 0.48), 24.0 + trail_intensity * 6.0, 130.0 + trail_intensity * 32.0)
 			_play_audio_cue(&"reward", clampf(0.28 + float(travel_score) / 420.0, 0.0, 0.9))
@@ -6180,12 +7120,8 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 		_spawn_pulse(pocket.global_position, Color(1.0, 0.36, 0.08), 28, 154)
 		_play_audio_cue(&"reward", 0.7)
 	elif chain_pot:
-		_show_float("CHAIN +110", pocket.global_position + Vector2(0, -78), Color(1.0, 0.66, 0.24), 20)
 		_spawn_pulse(pocket.global_position, Color(1.0, 0.62, 0.18), 22, 118)
-	if current_shot_called_pocket_id != &"" and pocket.pocket_id == current_shot_called_pocket_id:
-		_show_float("CALLED", pocket.global_position + Vector2(0, -56), Color(1.0, 0.86, 0.36), 19)
 	if _is_risk_ball_kind(ball.kind):
-		_show_float("RISK CASHED", pocket.global_position + Vector2(0, -126), Color(1.0, 0.22, 0.42), 22)
 		_spawn_pulse(pocket.global_position, Color(1.0, 0.18, 0.38), 30, 150)
 	_show_same_shot_chain_feedback(pocket.global_position, same_shot_chain_index)
 	if was_final_required_ball:
@@ -6197,14 +7133,12 @@ func on_pocket_entered(ball, pocket, forced: bool = false) -> void:
 	if ball.marked and current_table.get("objective", &"") == &"boss":
 		_spawn_pulse(pocket.global_position, Color(1.0, 0.86, 0.24), 24, 128)
 		if _boss_shield_remaining() == 0 and boss_health > 0:
-			_show_float("SHIELD DOWN", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 92), Color(1.0, 0.86, 0.24), 26)
 			_play_audio_cue(&"clear", 0.7)
 
 	if ball.kind == &"bomb":
 		_explode_ball(ball)
 	if active_shot_chalk_id == &"bomb_chalk" and not active_shot_chalk_used:
 		active_shot_chalk_used = true
-		_show_float("BOMB CHALK", pocket.global_position + Vector2(0, -76), Color(1.0, 0.38, 0.16), 18)
 		_explode_at(pocket.global_position, 330.0, 560.0, Color(1.0, 0.38, 0.16))
 	if ball.kind == &"boss":
 		boss_potted = true
@@ -6250,26 +7184,6 @@ func _pocket_by_id(id: StringName):
 			return pocket
 	return null
 
-func _guard_corner_pocket_escape(ball) -> bool:
-	if not _should_contain_balls():
-		return false
-	var pocket = _nearest_pocket(ball.global_position)
-	if pocket == null or not _is_corner_pocket(pocket.pocket_id):
-		return false
-	if not _is_near_corner_pocket_zone(ball.global_position, pocket.pocket_id):
-		return false
-	if state == State.SHOT_IN_MOTION and _can_capture_pocket(ball, pocket, true):
-		on_pocket_entered(ball, pocket, true)
-		return true
-	if state == State.SHOT_IN_MOTION:
-		var hard_bounds := TABLE_RECT.grow(OUT_OF_BOUNDS_MARGIN)
-		if hard_bounds.has_point(ball.global_position):
-			return false
-		_return_ball_to_table(ball)
-	else:
-		_return_ball_to_table(ball)
-	return true
-
 func _is_corner_pocket(id: StringName) -> bool:
 	return id == &"NW" or id == &"NE" or id == &"SW" or id == &"SE"
 
@@ -6278,7 +7192,7 @@ func _is_near_corner_pocket_zone(pos: Vector2, id: StringName) -> bool:
 	var right := TABLE_RECT.end.x
 	var top := TABLE_RECT.position.y
 	var bottom := TABLE_RECT.end.y
-	var inner := CORNER_MOUTH_RETURN_RADIUS + BALL_RADIUS * 1.1
+	var inner := CORNER_MOUTH_GUARD_RADIUS + BALL_RADIUS * 1.1
 	var outer := RAIL_THICKNESS + TABLE_BACKSTOP_THICKNESS + BALL_RADIUS
 	match id:
 		&"NW":
@@ -6315,29 +7229,32 @@ func _is_ball_in_pocket_throat(ball, pocket) -> bool:
 	var into_speed: float = -ball.linear_velocity.dot(inward)
 	return into_speed > maxf(28.0, speed * 0.28)
 
-func _can_capture_pocket(ball, pocket, forced: bool = false) -> bool:
+func _can_capture_pocket(ball, pocket, _forced: bool = false) -> bool:
 	if _pocket_capture_is_blocked(ball, pocket):
 		return false
+	if not _pocket_entry_allowed_by_gate(ball, pocket):
+		return false
 	var local := _pocket_local_position(ball.global_position, pocket)
-	if _ball_has_entered_pocket_cup(ball, pocket, local):
+	return _ball_has_entered_pocket_cup(ball, pocket, local)
+
+func _pocket_entry_allowed_by_gate(ball, pocket) -> bool:
+	var gates: Array = current_table.get("pocket_gates", [])
+	if gates.is_empty():
 		return true
-	if not forced:
-		return false
-	if _ball_is_in_pocket_drop_chute(ball, pocket, local):
-		return true
-	var depth := float(local.get("depth", 9999.0))
-	var lateral := absf(float(local.get("lateral", 9999.0)))
-	if depth > _pocket_fall_depth(pocket) + BALL_RADIUS * 0.18:
-		return false
-	if lateral > _pocket_fall_half_width(pocket, ball.linear_velocity.length()):
-		return false
-	if ball.global_position.distance_to(pocket.global_position) > _board_pocket_capture_radius() + BALL_RADIUS * 0.15:
-		return false
-	var speed: float = ball.linear_velocity.length()
-	if speed <= 34.0:
-		return true
-	var inward := _pocket_inward_axis(pocket)
-	return -ball.linear_velocity.dot(inward) > -28.0
+	for gate in gates:
+		if typeof(gate) != TYPE_DICTIONARY:
+			continue
+		if StringName(gate.get("id", &"")) != pocket.pocket_id:
+			continue
+		var velocity: Vector2 = ball.linear_velocity
+		if velocity.length() <= 18.0:
+			return false
+		var axis: Vector2 = gate.get("axis", _pocket_inward_axis(pocket))
+		if axis.length() <= 0.01:
+			axis = _pocket_inward_axis(pocket)
+		var min_alignment := float(gate.get("min_alignment", 0.62))
+		return velocity.normalized().dot(axis.normalized()) >= min_alignment
+	return true
 
 func _is_clean_pocket_entry(ball, pocket) -> bool:
 	var to_pocket: Vector2 = pocket.global_position - ball.global_position
@@ -6363,9 +7280,10 @@ func _is_clean_pocket_entry(ball, pocket) -> bool:
 		alignment_floor = 0.42
 	return alignment >= alignment_floor
 
-func _return_ball_to_table(ball) -> void:
+func _nudge_tunneled_ball_toward_table(ball) -> void:
 	if browser_pocket_test_active:
-		browser_pocket_test_returns += 1
+		browser_pocket_test_tunnel_rescues += 1
+		browser_pocket_test_total_tunnel_rescues += 1
 	var clamped_pos := _clamp_ball_inside_table(ball.global_position, BALL_RADIUS + 8.0)
 	var pocket = _nearest_pocket(ball.global_position)
 	if pocket != null and _is_corner_pocket(pocket.pocket_id) and _is_near_corner_pocket_zone(ball.global_position, pocket.pocket_id):
@@ -6376,7 +7294,6 @@ func _return_ball_to_table(ball) -> void:
 	if inward.length() <= 0.01:
 		inward = Vector2.LEFT
 	ball.redirect_active(clamped_pos, inward * minf(ball.linear_velocity.length() * 0.35, 240.0), ball.angular_velocity * 0.25)
-	_show_float("RETURN", clamped_pos + Vector2(0, -28), Color(0.55, 0.9, 1.0), 18)
 
 func _clamp_ball_inside_table(pos: Vector2, inset: float) -> Vector2:
 	return Vector2(
@@ -6390,6 +7307,8 @@ func _pot_text(ball) -> String:
 	match ball.kind:
 		&"gold":
 			return "+$ GOLD"
+		&"glass":
+			return "GLASS"
 		&"boss":
 			return "ANCHOR DOWN"
 		_:
@@ -6400,6 +7319,13 @@ func _damage_boss_for_hit(a, b, speed: float) -> void:
 		return
 	var boss = a if a.kind == &"boss" else b
 	var hitter = b if a.kind == &"boss" else a
+	var boss_mode: StringName = current_table.get("boss_mode", &"hp_anchor")
+	if boss_mode == &"shrink_eight":
+		_damage_shrink_boss_for_hit(boss, speed)
+		return
+	if boss_mode == &"teleport_eight":
+		_damage_teleport_boss_for_hit(boss, speed)
+		return
 	var shielded := _boss_shield_remaining() > 0
 	var damage := int(clampf(speed * (0.18 if shielded else 0.42), 8.0, 190.0))
 	if hitter.kind != &"cue":
@@ -6418,6 +7344,109 @@ func _damage_boss_for_hit(a, b, speed: float) -> void:
 		boss_vulnerable = true
 		_show_float("VULNERABLE", boss.global_position + Vector2(0, -70), Color(1.0, 0.85, 0.2), 27)
 
+func _damage_teleport_boss_for_hit(boss, speed: float) -> void:
+	if speed < 190.0 or boss.potted:
+		return
+	_teleport_boss(boss)
+	if _boss_shield_remaining() > 0:
+		_show_float("SHIELDED", boss.global_position + Vector2(0, -70), Color(1.0, 0.28, 0.12), 23)
+		return
+	boss_special_hits += 1
+	var required := maxi(1, int(current_table.get("boss_health_required", 3)))
+	boss_health = maxi(0, required - boss_special_hits)
+	current_log.add_event(GameplayEvent.new(GameplayEvent.Type.BOSS_DAMAGED, shot_id, {
+		"damage": 1,
+		"speed": speed,
+		"teleport_hit": boss_special_hits
+	}, boss.global_position))
+	_show_float("ANCHOR " + str(boss_special_hits) + "/" + str(required), boss.global_position + Vector2(0, -86), Color(1.0, 0.36, 0.10), 23)
+	if boss_special_hits >= required:
+		boss_vulnerable = true
+		boss_health = 0
+		_show_float("VULNERABLE", boss.global_position + Vector2(0, -112), Color(1.0, 0.85, 0.2), 27)
+
+func _damage_shrink_boss_for_hit(boss, speed: float) -> void:
+	if speed < 230.0 or boss_vulnerable:
+		return
+	boss_special_hits += 1
+	var required := maxi(1, int(current_table.get("boss_shrink_hits_required", 3)))
+	boss_health = maxi(0, required - boss_special_hits)
+	var start_radius := 34.0
+	var end_radius := BALL_RADIUS
+	var t := clampf(float(boss_special_hits) / float(required), 0.0, 1.0)
+	boss.radius = lerpf(start_radius, end_radius, t)
+	boss.mass = lerpf(3.2, 1.25, t)
+	boss._rebuild_shape()
+	boss.queue_redraw()
+	current_log.add_event(GameplayEvent.new(GameplayEvent.Type.BOSS_DAMAGED, shot_id, {
+		"damage": 1,
+		"speed": speed,
+		"shrink_hit": boss_special_hits
+	}, boss.global_position))
+	_show_float("SHRINK " + str(boss_special_hits) + "/" + str(required), boss.global_position + Vector2(0, -58), Color(1.0, 0.82, 0.22), 24)
+	_spawn_pulse(boss.global_position, Color(1.0, 0.45, 0.12), 26, 118)
+	if boss_special_hits >= required:
+		boss_vulnerable = true
+		boss_health = 0
+		_show_float("POCKETABLE", boss.global_position + Vector2(0, -86), Color(1.0, 0.88, 0.28), 28)
+		_play_audio_cue(&"clear", 0.75)
+
+func _teleport_boss(boss) -> void:
+	var old_pos: Vector2 = boss.global_position
+	var new_pos: Vector2 = _boss_teleport_position(old_pos)
+	if new_pos.distance_to(old_pos) < 64.0:
+		return
+	var velocity: Vector2 = boss.linear_velocity * 0.28
+	boss.redirect_active(new_pos, velocity.rotated(fx_rng.randf_range(-0.55, 0.55)), boss.angular_velocity * 0.35)
+	_spawn_pulse(old_pos, Color(1.0, 0.16, 0.08), 28, 140)
+	_spawn_pulse(new_pos, Color(1.0, 0.62, 0.14), 28, 140)
+	_show_float("TELEPORT", new_pos + Vector2(0, -52), Color(1.0, 0.64, 0.18), 24)
+	shake_amount = maxf(shake_amount, 7.5)
+
+func _boss_teleport_position(old_pos: Vector2) -> Vector2:
+	var candidates := [
+		Vector2(620, 322),
+		Vector2(736, 506),
+		Vector2(838, 326),
+		Vector2(958, 498),
+		Vector2(1032, 384),
+		Vector2(770, 410)
+	]
+	var offset := reward_rng.randi_range(0, candidates.size() - 1)
+	for i in range(candidates.size()):
+		var candidate: Vector2 = candidates[(i + offset) % candidates.size()]
+		candidate += Vector2(reward_rng.randi_range(-28, 28), reward_rng.randi_range(-24, 24))
+		candidate = _clamp_ball_inside_table(candidate, BALL_RADIUS + 40.0)
+		if candidate.distance_to(old_pos) < 120.0:
+			continue
+		var clear := true
+		for ball in _active_balls():
+			if ball.kind == &"boss":
+				continue
+			if candidate.distance_to(ball.global_position) < BALL_RADIUS * 3.0:
+				clear = false
+				break
+		if clear:
+			return candidate
+	return _clamp_ball_inside_table(TABLE_RECT.get_center() + Vector2(160, 0), BALL_RADIUS + 40.0)
+
+func _damage_glass_ball(ball, speed: float) -> void:
+	if glass_break_failed or ball.potted or speed < 155.0:
+		return
+	ball.glass_hits += 1
+	ball.queue_redraw()
+	var limit := maxi(1, int(ball.glass_break_limit))
+	_spawn_pulse(ball.global_position, Color(0.70, 1.0, 1.0), 14 + ball.glass_hits * 5, 70 + ball.glass_hits * 20)
+	if ball.glass_hits <= limit:
+		_show_float("CRACK " + str(ball.glass_hits) + "/" + str(limit), ball.global_position + Vector2(0, -42), Color(0.72, 1.0, 1.0), 20)
+		return
+	glass_break_failed = true
+	run_health = 0
+	failed_current_table = true
+	_show_float("GLASS BROKE", ball.global_position + Vector2(0, -58), Color(0.72, 1.0, 1.0), 30)
+	_spawn_pulse(ball.global_position, Color(0.80, 1.0, 1.0), 36, 180)
+	_play_audio_cue(&"fail", 0.85)
+
 func _boss_shield_remaining() -> int:
 	if current_table.get("objective", &"") != &"boss":
 		return 0
@@ -6434,7 +7463,6 @@ func _explode_ball(ball) -> void:
 
 func _explode_at(origin: Vector2, radius: float, impulse: float, color: Color) -> void:
 	_spawn_pulse(origin, color, 24, 150)
-	_show_float("BOOM", origin + Vector2(0, -46), color, 28)
 	shake_amount = maxf(shake_amount, 9.0)
 	for ball in _active_balls():
 		var to_ball: Vector2 = ball.global_position - origin
@@ -6477,9 +7505,9 @@ func _resolve_shot() -> void:
 	else:
 		_reset_whiff_clock_after_pot(summary)
 		table_pot_scoring_shots += 1
-	_apply_rival_intent(summary)
 	_apply_ball_loss_rule(summary)
 	_apply_risk_ball_penalties(summary)
+	_apply_rival_intent(summary)
 	last_summary = summary
 	_record_table_tags(summary)
 
@@ -6491,10 +7519,10 @@ func _resolve_shot() -> void:
 	_show_shot_receipt(summary)
 	_show_shot_tag_feedback(summary)
 	if summary.final_score > 0:
-		_show_float("+" + str(summary.final_score), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 46), Color(0.72, 1.0, 0.66), 30)
-	if summary.cash_delta > 0:
+		_show_final_score_float(summary.final_score)
+	if not summary.has_successful_pot() and summary.cash_delta > 0:
 		_show_float("+$" + str(summary.cash_delta), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5 + 120, 48), Color(1.0, 0.86, 0.24), 24)
-	elif summary.cash_delta < 0:
+	elif not summary.has_successful_pot() and summary.cash_delta < 0:
 		_show_float("-$" + str(abs(summary.cash_delta)), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5 + 120, 48), Color(1.0, 0.34, 0.24), 24)
 
 	_reset_cue_if_needed()
@@ -6506,7 +7534,6 @@ func _resolve_shot() -> void:
 		chain_heat_ready = true
 		if cue_ball != null and not cue_ball.potted:
 			_spawn_pulse(cue_ball.global_position, Color(1.0, 0.54, 0.16), 18, 100)
-			_show_float("NEXT SHOT HOT", cue_ball.global_position + Vector2(0, -52), Color(1.0, 0.66, 0.24), 19)
 	_update_hud()
 
 	if completed_current_table:
@@ -6569,9 +7596,14 @@ func _apply_ball_loss_rule(summary: ShotSummary) -> void:
 	summary.health_delta -= loss
 	var marker_text := "soul marker" if loss == 1 else "soul markers"
 	summary.breakdown.append(reason + ": -" + str(loss) + " " + marker_text)
-	_show_float("-" + str(loss) + " MARKER", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 92), Color(1.0, 0.30, 0.22), 25)
+	if not summary.has_successful_pot():
+		_show_float("-" + str(loss) + " MARKER", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 92), Color(1.0, 0.30, 0.22), 25)
 
 func _apply_post_shot_table_rules() -> void:
+	if StringName(current_table.get("boss_mode", &"")) == &"teleport_eight" and boss_ball != null and is_instance_valid(boss_ball) and not boss_ball.potted:
+		var blink_chance := 0.25 if boss_vulnerable else 0.45
+		if reward_rng.randf() < blink_chance:
+			_teleport_boss(boss_ball)
 	if current_table.get("modifier", &"") != &"gold_rush":
 		return
 	var expire_after := int(current_table.get("gold_expires_after", 0))
@@ -6599,7 +7631,6 @@ func _setup_rival_for_table(index: int) -> void:
 	rival_name = String(rival.get("name", HUSTLER_NAME))
 	rival_title = String(rival.get("title", HUSTLER_TITLE))
 	rival_composure = int(rival.get("composure", 3))
-	rival_pressure = 0
 	_clear_lucien_dare()
 	table_notes.append(rival_name + " sits in wearing the " + _rival_mask_name(current_table) + " mask.")
 
@@ -6636,13 +7667,14 @@ func _rival_mask_name(table_def: Dictionary) -> String:
 		_:
 			return "house-regular"
 
-func _advance_rival_intent(seed_offset: int = 0) -> void:
-	var pool := _rival_intent_pool_for_table(current_table)
+func _advance_rival_intent(seed_offset: int = 0) -> bool:
+	var pool := _feasible_rival_intent_pool(_rival_intent_pool_for_table(current_table))
 	if pool.is_empty():
-		rival_intent = &"clean"
-		return
-	var index: int = abs(reward_rng.randi() + table_index + table_shots_used + rival_pressure + seed_offset) % pool.size()
+		rival_intent = &""
+		return false
+	var index: int = abs(reward_rng.randi() + table_index + table_shots_used + seed_offset) % pool.size()
 	rival_intent = pool[index]
+	return true
 
 func _rival_intent_pool_for_table(table_def: Dictionary) -> Array[StringName]:
 	match StringName(table_def.get("modifier", &"classic")):
@@ -6663,6 +7695,68 @@ func _rival_intent_pool_for_table(table_def: Dictionary) -> Array[StringName]:
 		_:
 			return [&"clean", &"called", &"rail"]
 
+func _feasible_rival_intent_pool(pool: Array[StringName]) -> Array[StringName]:
+	var feasible: Array[StringName] = []
+	for intent in pool:
+		_add_feasible_rival_intent(feasible, intent)
+	if feasible.is_empty():
+		for fallback: StringName in [&"clean", &"called", &"control"]:
+			_add_feasible_rival_intent(feasible, fallback)
+	return feasible
+
+func _add_feasible_rival_intent(feasible: Array[StringName], intent: StringName) -> void:
+	if feasible.has(intent):
+		return
+	if _rival_intent_feasible(intent):
+		feasible.append(intent)
+
+func _rival_intent_feasible(intent: StringName) -> bool:
+	var pottable_count := _active_pottable_ball_count()
+	match intent:
+		&"called":
+			return pottable_count > 0 and _has_table_pockets()
+		&"rail":
+			return pottable_count > 0 and _has_table_pockets()
+		&"control":
+			return pottable_count > 0
+		&"power":
+			return pottable_count > 0 and _active_object_ball_count(false) >= 3
+		&"gold":
+			return _active_ball_kind_count(&"gold") > 0
+		&"boss":
+			return StringName(current_table.get("objective", &"")) == &"boss" and _has_active_boss_ball() and (boss_health > 0 or boss_vulnerable)
+		&"clean":
+			return pottable_count > 0
+	return false
+
+func _active_pottable_ball_count() -> int:
+	return _active_object_ball_count(true)
+
+func _active_object_ball_count(include_vulnerable_boss: bool) -> int:
+	var count := 0
+	for ball in _active_balls():
+		if ball.kind == &"cue":
+			continue
+		if ball.kind == &"boss":
+			if include_vulnerable_boss and boss_vulnerable:
+				count += 1
+			continue
+		count += 1
+	return count
+
+func _active_ball_kind_count(kind: StringName) -> int:
+	var count := 0
+	for ball in _active_balls():
+		if ball.kind == kind:
+			count += 1
+	return count
+
+func _has_active_boss_ball() -> bool:
+	return _active_ball_kind_count(&"boss") > 0
+
+func _has_table_pockets() -> bool:
+	return pockets != null and pockets.get_child_count() > 0
+
 func _reset_lucien_dare_schedule() -> void:
 	table_dares_called = 0
 	var shot_limit := int(current_table.get("shot_limit", 6))
@@ -6682,7 +7776,7 @@ func _schedule_next_lucien_dare_window() -> void:
 func _maybe_call_lucien_dare() -> void:
 	if not _lucien_dares_allowed():
 		return
-	if lucien_dare_active:
+	if lucien_dare_active or lucien_dare_offer_pending:
 		return
 	if table_dares_called >= _lucien_max_dares_for_table():
 		return
@@ -6705,33 +7799,94 @@ func _lucien_dares_allowed() -> bool:
 		return false
 	if table_intro_panel != null and table_intro_panel.visible:
 		return false
+	if lucien_dare_offer_panel != null and lucien_dare_offer_panel.visible:
+		return false
 	return true
 
 func _call_lucien_dare() -> void:
-	_advance_rival_intent()
+	if not _advance_rival_intent():
+		_schedule_next_lucien_dare_window()
+		return
 	table_dares_called += 1
 	_schedule_next_lucien_dare_window()
 	lucien_dare_active = true
-	lucien_dare_flash_text = "DARE CALLED"
-	lucien_dare_flash_seconds = 2.4
+	lucien_dare_offer_pending = true
+	lucien_dare_doubled = false
+	lucien_dare_flash_text = "LUCIEN CALLS THE SHOT"
+	lucien_dare_flash_seconds = 3.0
 	var anchor := TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 118)
-	_show_float("DARE CALLED", anchor, Color(1.0, 0.82, 0.28), 24)
+	_show_float("LUCIEN CALLS THE SHOT", anchor, Color(1.0, 0.82, 0.28), 24)
 	table_notes.append("Lucien's dare: " + _rival_intent_detail(rival_intent))
+	_show_lucien_dare_offer()
 
 func _clear_lucien_dare() -> void:
 	lucien_dare_active = false
+	lucien_dare_offer_pending = false
+	lucien_dare_doubled = false
 	rival_intent = &""
 	lucien_dare_flash_text = ""
 	lucien_dare_flash_seconds = 0.0
+	_clear_called_pocket()
+	if lucien_dare_offer_panel != null:
+		lucien_dare_offer_panel.visible = false
+
+func _show_lucien_dare_offer() -> void:
+	_update_lucien_dare_offer_panel()
+	if lucien_dare_offer_panel != null:
+		lucien_dare_offer_panel.modulate = Color.WHITE
+		lucien_dare_offer_panel.visible = true
+		lucien_dare_offer_panel.move_to_front()
+
+func _accept_lucien_dare(double_dare: bool) -> void:
+	if not lucien_dare_active or not lucien_dare_offer_pending:
+		return
+	if double_dare:
+		lucien_dare_doubled = true
+		lucien_dare_flash_text = "DOUBLE DARE"
+	else:
+		lucien_dare_doubled = false
+		lucien_dare_flash_text = "DARE LOCKED"
+	lucien_dare_offer_pending = false
+	lucien_dare_flash_seconds = 1.9
+	if lucien_dare_offer_panel != null:
+		lucien_dare_offer_panel.visible = false
+	var anchor := TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 118)
+	var float_text := "DOUBLE DARE" if lucien_dare_doubled else "DARE LOCKED"
+	_show_float(float_text, anchor, Color(1.0, 0.82, 0.28), 22)
+	if _active_dare_needs_called_pocket() and called_pocket_id == &"":
+		calling_pocket_mode = true
+	_update_hud()
+	queue_redraw()
+
+func _update_lucien_dare_offer_panel() -> void:
+	if lucien_dare_offer_panel == null:
+		return
+	var base_score := _lucien_dare_base_score_reward()
+	var base_cash := _lucien_dare_base_cash_reward()
+	var double_score := base_score * 2
+	var double_cash := base_cash
+	lucien_dare_offer_title.text = "LUCIEN'S DARE"
+	lucien_dare_offer_body.text = "\"" + _lucien_dare_taunt(rival_intent) + "\"\n" + _rival_intent_detail(rival_intent)
+	lucien_dare_offer_stakes.text = "Base: win +" + str(base_score) + " Rep, +$" + str(base_cash) + " Bankroll, refill soul markers; miss = no dare penalty.\nDouble Dare: win +" + str(double_score) + " Rep, +$" + str(double_cash) + " Bankroll, refill soul markers, random rare relic; miss = soul markers halved."
+	lucien_dare_accept_button.text = "Take Dare\nRefill marks / safe miss"
+	lucien_dare_raise_button.text = "Double Dare\nRare relic / half marks"
+	lucien_dare_raise_button.disabled = false
+	lucien_dare_raise_button.tooltip_text = "Win for full soul markers and a random rare relic. Miss and your current markers are halved."
+	lucien_dare_accept_button.tooltip_text = "Lock in Lucien's dare for the next shot."
 
 func _apply_rival_intent(summary: ShotSummary) -> void:
 	if summary == null or rival_name == "" or not lucien_dare_active:
 		return
 	var active_intent := rival_intent
+	var doubled := lucien_dare_doubled
 	var anchor := TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 118)
 	if summary.miss:
-		summary.breakdown.append("Lucien's dare voided by true whiff; whiff clock advances instead.")
-		_show_float("TRUE WHIFF " + str(_whiff_marker_receipt_count()) + "/3", anchor, Color(1.0, 0.44, 0.42), 20)
+		if doubled:
+			_apply_lucien_double_dare_failure(summary)
+			_show_float("DOUBLE DARE FAILED", anchor, Color(1.0, 0.34, 0.42), 24)
+		else:
+			summary.breakdown.append("DARE MISSED: no dare penalty; true whiff clock advances")
+			_show_float("DARE MISSED", anchor, Color(1.0, 0.44, 0.42), 22)
 		_clear_lucien_dare()
 		return
 	if _rival_intent_satisfied(summary, active_intent):
@@ -6739,21 +7894,78 @@ func _apply_rival_intent(summary: ShotSummary) -> void:
 		var cash_bonus := _lucien_dare_cash_reward()
 		summary.final_score += bonus
 		summary.cash_delta += cash_bonus
-		rival_pressure = max(0, rival_pressure - 1)
-		summary.breakdown.append("DARE WON: " + _rival_intent_detail(active_intent) + " +" + str(bonus) + ", +$" + str(cash_bonus))
-		_show_float("DARE WON", anchor, Color(0.70, 1.0, 0.74), 24)
+		_apply_lucien_dare_health_refill(summary)
+		var doubled_text := " DOUBLE" if doubled else ""
+		summary.breakdown.append("DARE WON" + doubled_text + ": " + _rival_intent_detail(active_intent) + " +" + str(bonus) + " Rep, +$" + str(cash_bonus))
+		if doubled:
+			_grant_lucien_double_dare_rare_upgrade(summary)
+		if not summary.has_successful_pot():
+			_show_float("DARE WON" + doubled_text, anchor, Color(0.70, 1.0, 0.74), 24)
 		_clear_lucien_dare()
 		return
-	rival_pressure += 1
-	if rival_pressure >= LUCIEN_DARE_WARNING_LIMIT:
-		summary.health_delta -= 1
-		rival_pressure = 0
-		summary.breakdown.append("MARKER CLAIMED: second missed Lucien dare, -1 soul marker")
-		_show_float("MARKER CLAIMED", anchor, Color(1.0, 0.28, 0.28), 25)
+	if doubled:
+		_apply_lucien_double_dare_failure(summary)
+		if not summary.has_successful_pot():
+			_show_float("DOUBLE DARE FAILED", anchor, Color(1.0, 0.34, 0.42), 24)
 	else:
-		summary.breakdown.append("DARE MISSED: Warning " + str(rival_pressure) + "/" + str(LUCIEN_DARE_WARNING_LIMIT))
-		_show_float("DARE MISSED", anchor, Color(1.0, 0.44, 0.42), 22)
+		summary.breakdown.append("DARE MISSED: no dare penalty")
+		if not summary.has_successful_pot():
+			_show_float("DARE MISSED", anchor, Color(1.0, 0.44, 0.42), 22)
 	_clear_lucien_dare()
+
+func _apply_lucien_dare_health_refill(summary: ShotSummary) -> void:
+	if summary == null:
+		return
+	var target := _meta_max_balls()
+	var projected_health := run_health + summary.health_delta
+	var restore := maxi(0, target - projected_health)
+	if restore <= 0:
+		summary.breakdown.append("Dare clear refill: soul markers already full")
+		return
+	summary.health_delta += restore
+	var marker_text := "soul marker" if restore == 1 else "soul markers"
+	summary.breakdown.append("Dare clear refill: +" + str(restore) + " " + marker_text)
+
+func _apply_lucien_double_dare_failure(summary: ShotSummary) -> void:
+	if summary == null:
+		return
+	var projected_health := maxi(0, run_health + summary.health_delta)
+	var target := int(floor(float(projected_health) * 0.5))
+	var loss := maxi(0, projected_health - target)
+	if loss <= 0:
+		summary.breakdown.append("DOUBLE DARE FAILED: soul markers already at 0")
+		return
+	summary.health_delta -= loss
+	summary.breakdown.append("DOUBLE DARE FAILED: soul markers halved to " + str(target) + " (-" + str(loss) + ")")
+
+func _grant_lucien_double_dare_rare_upgrade(summary: ShotSummary) -> void:
+	var id := _roll_lucien_double_dare_rare_relic()
+	if id == &"":
+		summary.breakdown.append("Double Dare rare: no rare relic available")
+		return
+	var name := relic_engine.get_display_name(id)
+	if not relic_ids.has(id):
+		relic_ids.append(id)
+		_sync_relic_panel()
+		summary.breakdown.append("Double Dare rare: " + name)
+		table_notes.append("Double Dare rare: " + name)
+	else:
+		summary.breakdown.append("Double Dare rare rolled held relic: " + name)
+	_show_float("RARE: " + name, TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.72, 0.24), 24)
+
+func _roll_lucien_double_dare_rare_relic() -> StringName:
+	var fresh_pool: Array[StringName] = []
+	var fallback_pool: Array[StringName] = []
+	for id in relic_engine.all_relic_ids():
+		if relic_engine.get_rarity(id) != &"rare":
+			continue
+		fallback_pool.append(id)
+		if not relic_ids.has(id):
+			fresh_pool.append(id)
+	var pool := fresh_pool if not fresh_pool.is_empty() else fallback_pool
+	if pool.is_empty():
+		return &""
+	return pool[reward_rng.randi_range(0, pool.size() - 1)]
 
 func _rival_intent_satisfied(summary: ShotSummary, intent: StringName) -> bool:
 	match intent:
@@ -6789,19 +8001,20 @@ func _rival_hud_text() -> String:
 	if rival_name == "":
 		return ""
 	if lucien_dare_active:
-		return rival_name + " | Lucien's Dare: " + _rival_intent_detail(rival_intent) + " | Reward: +" + str(_lucien_dare_score_reward()) + ", +$" + str(_lucien_dare_cash_reward()) + " | Warning " + str(rival_pressure) + "/" + str(LUCIEN_DARE_WARNING_LIMIT)
-	return rival_name + " | Watching for a dare | Warning " + str(rival_pressure) + "/" + str(LUCIEN_DARE_WARNING_LIMIT)
+		var risk_text := " | Double: rare relic, miss halves marks" if lucien_dare_doubled else " | Miss: no dare penalty"
+		return rival_name + " | Lucien's Dare: " + _rival_intent_detail(rival_intent) + " | Reward: +" + str(_lucien_dare_score_reward()) + " Rep, +$" + str(_lucien_dare_cash_reward()) + " Bankroll, full marks" + risk_text
+	return rival_name + " | Dares refill soul markers"
 
 func _rival_intent_detail(intent: StringName) -> String:
 	match intent:
 		&"called":
 			return "Call a pocket, then sink a ball there"
 		&"rail":
-			return "Bounce off a rail before the pot"
+			return "Sink a ball after a cushion bounce"
 		&"control":
-			return "Sink a gentle or clean-center shot"
+			return "Sink a gentle shot or a center-pocket shot"
 		&"power":
-			return "Hit hard enough to scatter the table"
+			return "Sink with high force, or make four balls move"
 		&"gold":
 			return "Sink a gold ball"
 		&"boss":
@@ -6811,15 +8024,41 @@ func _rival_intent_detail(intent: StringName) -> String:
 	return "Sink any ball without scratching"
 
 func _lucien_dare_score_reward() -> int:
-	return 90 + _table_tier(current_table) * 30
+	return (_lucien_dare_base_score_reward() + run_shop_dare_lure * 60 * _shop_break_multiplier()) * (2 if lucien_dare_doubled else 1)
 
 func _lucien_dare_cash_reward() -> int:
+	var cash := _lucien_dare_base_cash_reward() + run_shop_dare_lure * _shop_break_multiplier()
+	return cash
+
+func _lucien_dare_base_score_reward() -> int:
+	return 90 + _table_tier(current_table) * 30
+
+func _lucien_dare_base_cash_reward() -> int:
 	return 2 if StringName(current_table.get("objective", &"")) == &"boss" or table_index >= _run_final_table_index() else 1
+
+func _lucien_dare_taunt(intent: StringName) -> String:
+	match intent:
+		&"called":
+			return "Name the grave before you dig it."
+		&"rail":
+			return "Show me a soul that knows how to bend."
+		&"control":
+			return "Soft hands, steady nerve. Or was that just posture?"
+		&"power":
+			return "Scatter them. Wake the room."
+		&"gold":
+			return "The bright one pays, if your hand doesn't shake."
+		&"boss":
+			return "Touch the Anchor and hear it answer."
+		&"clean":
+			return "No scratch. No excuses. Just one clean pocket."
+	return "One shot. One marker closer."
 
 func _lucien_dare_status_text() -> String:
 	if lucien_dare_active:
-		return "Lucien's Dare: " + _rival_intent_detail(rival_intent)
-	return "Lucien: watching | Warning " + str(rival_pressure) + "/" + str(LUCIEN_DARE_WARNING_LIMIT)
+		var double_text := " | Double Dare" if lucien_dare_doubled else ""
+		return "Lucien's Dare: " + _rival_intent_detail(rival_intent) + double_text
+	return "Lucien | Dares refill soul markers"
 
 func _build_summary():
 	var summary := ShotSummary.new()
@@ -6883,7 +8122,7 @@ func _show_shot_receipt(summary: ShotSummary) -> void:
 		return
 	var verdict := "NO PAYOUT"
 	if summary.final_score > 0:
-		verdict = "+" + str(summary.final_score) + " SCORE"
+		verdict = "+" + str(summary.final_score) + " REP"
 	if summary.scratch:
 		verdict = "SCRATCH"
 	elif summary.miss:
@@ -6892,7 +8131,7 @@ func _show_shot_receipt(summary: ShotSummary) -> void:
 		verdict = "ANCHOR HIT"
 	var deltas: Array[String] = []
 	if summary.cash_delta != 0:
-		deltas.append(("+$" if summary.cash_delta > 0 else "-$") + str(abs(summary.cash_delta)))
+		deltas.append(("+$" if summary.cash_delta > 0 else "-$") + str(abs(summary.cash_delta)) + " Bankroll")
 	if summary.style_delta != 0:
 		deltas.append(("+" if summary.style_delta > 0 else "") + str(summary.style_delta) + " Style")
 	if summary.health_delta != 0:
@@ -6924,7 +8163,7 @@ func _shot_receipt_line_items(summary: ShotSummary, deltas: Array[String]) -> Ar
 		if item != "":
 			lines.append(item)
 	if summary.final_score > 0:
-		lines.append("Shot total: +" + str(summary.final_score) + " score")
+		lines.append("Shot total: +" + str(summary.final_score) + " Rep")
 	elif summary.scratch:
 		lines.append("Cue ball scratched. Lucien takes a soul marker unless the scratch was forgiven.")
 	elif summary.miss:
@@ -6974,7 +8213,6 @@ func _highlight_scored_pockets(summary: ShotSummary) -> void:
 			continue
 		var color := _shot_tag_callout_color(summary)
 		_spawn_pulse(pocket.global_position, color, 22.0 + float(pulse_index) * 4.0, 118.0)
-		_show_float("SCORED", pocket.global_position + Vector2(0, -52 - pulse_index * 8), color, 18)
 		pulse_index += 1
 
 func _shot_grade_text(summary: ShotSummary) -> String:
@@ -7004,10 +8242,11 @@ func _show_shot_tag_feedback(summary: ShotSummary) -> void:
 		return
 	var color := _shot_tag_callout_color(summary)
 	var anchor := _shot_feedback_anchor(summary)
-	_show_float(callout, anchor + Vector2(0, -54), color, 28)
 	_spawn_pulse(anchor, color, 26, 128)
 	if summary.tags.has(&"RICOCHET_POT") or summary.tags.has(&"CHAIN_POT") or summary.tags.has(&"MULTI_POT") or summary.tags.has(&"PERFECT_POT") or summary.tags.has(&"CALLED_POCKET") or summary.boss_damage > 0:
 		_play_audio_cue(&"reward", 0.38)
+	if not summary.has_successful_pot():
+		_show_float(callout, anchor + Vector2(0, -54), color, 28)
 
 func _shot_feedback_anchor(summary: ShotSummary) -> Vector2:
 	var wanted: Array[int] = []
@@ -7065,15 +8304,15 @@ func _tag_display_text(tag: StringName) -> String:
 		&"MULTI_POT":
 			return "Double Drop"
 		&"BANK":
-			return "Bank Shot"
+			return "Cushion-Bounce Pot"
 		&"KICK":
-			return "Kick Shot"
+			return "Cue-First Cushion"
 		&"CAROM":
-			return "Carom"
+			return "Two-Ball Touch"
 		&"KISS":
-			return "Kiss"
+			return "Object-Ball Nudge"
 		&"RICOCHET_POT":
-			return "Ricochet Pot"
+			return "Indirect Pot"
 		&"CHAIN_POT":
 			return "Chain Heat"
 		&"LONG_POT":
@@ -7083,9 +8322,9 @@ func _tag_display_text(tag: StringName) -> String:
 		&"CALLED_POCKET":
 			return "Called Pocket"
 		&"SOFT_TOUCH":
-			return "Soft Touch"
+			return "Gentle Shot"
 		&"POWER_SHOT":
-			return "Power Shot"
+			return "Hard Shot"
 		&"CLUSTER_BREAK":
 			return "Rack Break"
 		&"BOSS_HIT":
@@ -7122,16 +8361,14 @@ func _shot_tag_callout_color(summary: ShotSummary) -> Color:
 		return Color(1.0, 0.42, 0.16)
 	return Color(0.72, 1.0, 0.66)
 
-func _show_runout_feedback(score_bonus: int) -> void:
+func _show_runout_feedback(_score_bonus: int) -> void:
 	var center := TABLE_RECT.position + TABLE_RECT.size * 0.5
 	var color := Color(1.0, 0.88, 0.34)
-	_show_float("RUNOUT CLEAR +" + str(score_bonus), center + Vector2(0, -132), color, 32)
 	_spawn_pulse(center, color, 34, 170)
 	_play_audio_cue(&"clear", 0.9)
 
-func _show_table_mastery_feedback(label: String, score_bonus: int, color: Color, y_offset: float) -> void:
+func _show_table_mastery_feedback(_label: String, _score_bonus: int, color: Color, _y_offset: float) -> void:
 	var center := TABLE_RECT.position + TABLE_RECT.size * 0.5
-	_show_float(label + " +" + str(score_bonus), center + Vector2(0, y_offset), color, 30)
 	_spawn_pulse(center, color, 28, 142)
 	shake_amount = maxf(shake_amount, 4.5)
 	_play_audio_cue(&"reward", 0.52)
@@ -7141,25 +8378,11 @@ func _show_same_shot_chain_feedback(pos: Vector2, chain_index: int) -> void:
 		return
 	var tier := mini(chain_index, 6)
 	var color := Color(1.0, 0.50, 0.12).lerp(Color(1.0, 0.92, 0.24), clampf(float(tier - 2) / 4.0, 0.0, 1.0))
-	var label := "DOUBLE DROP"
-	match chain_index:
-		2:
-			label = "DOUBLE DROP"
-		3:
-			label = "TRIPLE DROP"
-		4:
-			label = "FOUR BALL RUN"
-		_:
-			label = "RUN x" + str(chain_index)
-	var lift := 132.0 + float(tier - 2) * 14.0
-	_show_float(label, pos + Vector2(0, -lift), color, 24 + tier * 2)
-	_show_float("x" + str(chain_index), pos + Vector2(40, -52), color, 24 + tier * 3)
 	_spawn_pulse(pos, color, 28.0 + float(tier) * 6.0, 150.0 + float(tier) * 28.0)
 	_spawn_pulse(pos, Color(1.0, 0.22, 0.08), 18.0 + float(tier) * 4.0, 92.0 + float(tier) * 18.0)
 	_play_audio_cue(&"reward", clampf(0.42 + float(tier) * 0.13, 0.0, 1.0))
 	if chain_index >= 3:
 		var center := TABLE_RECT.position + TABLE_RECT.size * 0.5
-		_show_float("HOT STREAK", center + Vector2(0, -TABLE_RECT.size.y * 0.34), Color(1.0, 0.82, 0.28), 24 + tier)
 		_spawn_pulse(center, Color(1.0, 0.76, 0.22), 18.0 + float(tier) * 4.0, 104.0 + float(tier) * 14.0)
 	shake_amount = maxf(shake_amount, minf(11.0, 4.0 + float(tier) * 1.35))
 
@@ -7220,24 +8443,24 @@ func _complete_table(summary: ShotSummary) -> void:
 		bonus_score += runout_score
 		bonus_cash += 2
 		bonus_style += 1
-		table_notes.append("Runout Clear: +" + str(runout_score) + ", +$2, +1 Style")
+		table_notes.append("Runout Clear: +" + str(runout_score) + " Rep, +$2 Bankroll, +1 Style")
 		_show_runout_feedback(runout_score)
 	if table_shots_used == 1:
 		if not summary.tags.has(&"ONE_BALL_CLEAR"):
 			summary.tags.append(&"ONE_BALL_CLEAR")
 		bonus_score += ONE_BALL_CLEAR_SCORE
-		table_notes.append("One-Ball Clear: +" + str(ONE_BALL_CLEAR_SCORE))
+		table_notes.append("One-Ball Clear: +" + str(ONE_BALL_CLEAR_SCORE) + " Rep")
 		_show_table_mastery_feedback("ONE-BALL CLEAR", ONE_BALL_CLEAR_SCORE, Color(1.0, 0.72, 0.22), -176.0)
 	if table_shots_used > 0 and table_pot_scoring_shots >= table_shots_used:
 		if not summary.tags.has(&"EVERY_SHOT_POT"):
 			summary.tags.append(&"EVERY_SHOT_POT")
 		var every_shot_score := EVERY_SHOT_POT_BASE_SCORE + table_shots_used * EVERY_SHOT_POT_PER_SHOT_SCORE
 		bonus_score += every_shot_score
-		table_notes.append("Every Shot Potted: +" + str(every_shot_score))
+		table_notes.append("Every Shot Potted: +" + str(every_shot_score) + " Rep")
 		_show_table_mastery_feedback("EVERY SHOT PAID", every_shot_score, Color(0.72, 1.0, 0.66), -214.0)
 	if table_pot > 0:
 		bonus_cash += table_pot
-		table_notes.append("Room pot paid: +$" + str(table_pot))
+		table_notes.append("Room pot paid: +$" + str(table_pot) + " Bankroll")
 		table_pot = 0
 	run_score += bonus_score
 	table_score += bonus_score
@@ -7246,8 +8469,6 @@ func _complete_table(summary: ShotSummary) -> void:
 	run_health = clampi(run_health + bonus_balls, 0, 99)
 	for note in notes:
 		table_notes.append(String(note))
-	if bonus_score > 0 or bonus_cash > 0 or bonus_style > 0:
-		_show_float("CLEAR BONUS", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 86), Color(1.0, 0.85, 0.25), 27)
 	if not practice_run:
 		last_table_chip_receipt = _convert_table_score_to_meta_chips(table_score, META_CLEAR_CHIPS)
 	else:
@@ -7295,7 +8516,7 @@ func _fail_table() -> void:
 func _record_table_ledger(cleared: bool) -> void:
 	var result_text := "CLEARED" if cleared else "FAILED"
 	var table_name := String(current_table.get("name", "Table"))
-	var row := str(table_index + 1) + ". " + table_name + " - " + result_text + " | " + str(table_score) + " pts | " + str(table_shots_used) + " shots | " + _clean_table_status_text()
+	var row := str(table_index + 1) + ". " + table_name + " - " + result_text + " | " + str(table_score) + " Rep | " + str(table_shots_used) + " shots | " + _clean_table_status_text()
 	if current_table.get("objective", &"") == &"tag_trial":
 		row += " | Earned " + _tag_list_text(table_earned_tags)
 	if last_summary != null and not last_summary.tags.is_empty():
@@ -7310,7 +8531,7 @@ func _table_fail_summary() -> String:
 	lines.append("Table dossier: " + _table_dossier_text())
 	lines.append(_objective_failure_line())
 	lines.append(_objective_progress_text())
-	lines.append("Table score " + str(table_score) + " | Shots used " + str(table_shots_used) + " | " + _clean_table_status_text() + " | Soul markers " + str(run_health) + " | " + _cash_status_text())
+	lines.append("Table Rep " + str(table_score) + " | Shots used " + str(table_shots_used) + " | " + _clean_table_status_text() + " | Soul markers " + str(run_health) + " | " + _cash_status_text())
 	if last_summary != null and not last_summary.breakdown.is_empty():
 		lines.append("Last shot: " + _last_breakdown_text(3))
 	if last_summary != null and not last_summary.tags.is_empty():
@@ -7325,7 +8546,7 @@ func _objective_failure_line() -> String:
 	var objective: StringName = current_table.get("objective", &"clear_rack")
 	if objective != &"boss":
 		return "Table failed: no soul markers left with " + str(_remaining_required_balls()) + " balls still on the table."
-	return "Table failed: Lucien's Anchor Eight must be shield-broken, damaged, called, and potted. Anchor HP " + str(boss_health) + "."
+	return "Table failed: Lucien's Anchor Eight must be shield-broken, damaged, and potted. Anchor HP " + str(boss_health) + "."
 
 func _objective_progress_text() -> String:
 	if current_table.is_empty():
@@ -7337,6 +8558,11 @@ func _objective_progress_text() -> String:
 		return "Clear all: " + str(remaining) + " " + noun + " left"
 	match objective:
 		&"boss":
+			if StringName(current_table.get("boss_mode", &"")) == &"shrink_eight":
+				var required := maxi(1, int(current_table.get("boss_shrink_hits_required", 3)))
+				var shrink_left := maxi(0, required - boss_special_hits)
+				var shrink_text := "Pot the Black Eight" if boss_vulnerable else "Hard hits left " + str(shrink_left)
+				return "Progress: Size curse " + str(boss_special_hits) + "/" + str(required) + " | " + shrink_text
 			var shield_text := "Shield " + str(_boss_shield_remaining())
 			if _boss_shield_remaining() <= 0:
 				shield_text = "Vulnerable" if boss_vulnerable else "Shield down"
@@ -7364,7 +8590,11 @@ func _next_shot_read_text(summary: ShotSummary = null) -> String:
 	else:
 		match objective:
 			&"boss":
-				if _boss_shield_remaining() > 0:
+				if StringName(current_table.get("boss_mode", &"")) == &"shrink_eight" and not boss_vulnerable:
+					read = "hit the oversized Eight hard " + str(maxi(0, int(current_table.get("boss_shrink_hits_required", 3)) - boss_special_hits)) + " more time"
+					if maxi(0, int(current_table.get("boss_shrink_hits_required", 3)) - boss_special_hits) != 1:
+						read += "s"
+				elif _boss_shield_remaining() > 0:
 					read = "pot marked shield balls x" + str(_boss_shield_remaining())
 				elif boss_health > 0:
 					read = "bruise the Eight for " + str(boss_health) + " HP"
@@ -7384,7 +8614,7 @@ func _next_build_hint_text(summary: ShotSummary = null) -> String:
 		return "protect the cue ball; Safe Chalk helps"
 	if equipped_chalk_id != &"":
 		return _chalk_name(equipped_chalk_id) + " armed"
-	if called_pocket_id != &"":
+	if _call_pocket_dare_active() and called_pocket_id != &"":
 		return "call held on " + _pocket_display_name(called_pocket_id)
 	return _table_play_hint(current_table)
 
@@ -7409,11 +8639,19 @@ func _show_reward_draft(won: bool, table_unlocks: Array = []) -> void:
 		shot_receipt_seconds = 0.0
 	reward_summary_scroll.visible = false
 	continue_button.visible = true
+	continue_button.custom_minimum_size = Vector2(820, 68)
+	_set_button_font_size(continue_button, 26)
 	continue_button.text = "Continue"
 	for button in reward_buttons:
 		button.visible = false
 		button.disabled = false
 		button.tooltip_text = ""
+		button.icon = null
+		_hide_shop_button_sprite(button)
+	if shop_reroll_button != null:
+		shop_reroll_button.visible = false
+		shop_reroll_button.disabled = false
+		shop_reroll_button.tooltip_text = ""
 	if won:
 		_play_audio_cue(&"reward")
 		reward_title.text = current_table.get("name", "Table") + " cleared"
@@ -7434,8 +8672,9 @@ func _show_reward_draft(won: bool, table_unlocks: Array = []) -> void:
 
 func _table_score_receipt_summary(table_unlocks: Array) -> String:
 	var lines: Array[String] = []
-	lines.append("Score banked: +" + str(table_score))
-	lines.append("Run score: " + str(run_score))
+	lines.append("Bankroll for shop: " + _cash_status_text())
+	lines.append("Reputation banked: +" + str(table_score))
+	lines.append("Run Reputation: " + str(run_score))
 	if last_summary != null and not last_summary.breakdown.is_empty():
 		lines.append("")
 		lines.append("Final shot:")
@@ -7455,25 +8694,23 @@ func _table_score_receipt_summary(table_unlocks: Array) -> String:
 		var clear_bonus := int(last_table_chip_receipt.get("clear_bonus", 0))
 		var earned := int(last_table_chip_receipt.get("earned", 0))
 		lines.append("")
-		lines.append("Back-room marks:")
-		lines.append(str(before) + "/" + str(rate) + " + " + str(score_amount) + " score = " + str(score_chips) + " mark(s)")
-		lines.append("Clear bonus: +" + str(clear_bonus) + " mark")
-		lines.append("Earned now: +" + str(earned) + " mark(s)")
-		lines.append("Progress left over: " + str(after) + "/" + str(rate))
-		lines.append("Total marks: " + str(meta_chips_total) + " (" + str(_meta_unspent_chips()) + " unspent)")
+		lines.append("Reputation -> Back Room Chips:")
+		lines.append(str(before) + "/" + str(rate) + " + " + str(score_amount) + " Rep = " + str(score_chips) + " chip(s)")
+		lines.append("Clear bonus: +" + str(clear_bonus) + " chip")
+		lines.append("Earned now: +" + str(earned) + " chip(s)")
+		lines.append("Reputation left over: " + str(after) + "/" + str(rate))
+		lines.append("Back Room Chips: " + str(meta_chips_total) + " total, " + str(_meta_unspent_chips()) + " unspent")
 	if not table_unlocks.is_empty():
 		var unlock_text: Array[String] = []
 		for unlock in table_unlocks:
 			unlock_text.append(_compact_unlock_text(String(unlock)))
 		lines.append("")
 		lines.append("Unlocked: " + " / ".join(unlock_text))
-	lines.append("")
-	lines.append("Cash for shop: " + _cash_status_text())
 	return "\n".join(lines)
 
 func _table_clear_summary(table_unlocks: Array) -> String:
 	var lines: Array[String] = []
-	lines.append(_route_progress_text() + " clear | +" + str(table_score) + " score | Soul markers " + str(run_health) + " | " + _cash_status_text())
+	lines.append(_route_progress_text() + " clear | " + _cash_status_text() + " | Soul markers " + str(run_health) + " | +" + str(table_score) + " Rep")
 	lines.append(_compact_next_table_pressure_text())
 	if last_summary != null and not last_summary.tags.is_empty():
 		lines.append("Last: " + _compact_tag_csv(last_summary.tags, 4))
@@ -7543,70 +8780,183 @@ func _show_table_shop() -> void:
 	reward_panel_mode = &"shop"
 	reward_panel.visible = true
 	reward_choice_locked = false
+	if current_shop_offers.is_empty():
+		_roll_shop_inventory()
 	_layout_for_viewport()
 	reward_title.text = "Back-room Shop"
-	reward_summary_scroll.custom_minimum_size = Vector2(820, 108)
+	reward_summary_scroll.custom_minimum_size = Vector2(820, 84)
 	reward_summary_label.custom_minimum_size = Vector2(800, 0)
 	reward_summary_scroll.visible = true
 	reward_summary_label.text = _shop_summary_text()
 	reward_summary_scroll.scroll_vertical = 0
 	continue_button.visible = true
 	continue_button.text = "Next Table"
-	var choices := _shop_upgrade_choices()
+	var choices := current_shop_offers
 	for i in range(reward_buttons.size()):
-		if i >= choices.size():
+		if i >= SHOP_OFFER_COUNT or i >= choices.size():
 			reward_buttons[i].visible = false
+			_hide_shop_button_sprite(reward_buttons[i])
 			continue
 		var reward: Dictionary = choices[i]
 		var cost := int(reward.get("cost", 0))
-		var sold := shop_purchased_ids.has(reward.get("id", &""))
+		var sold := shop_purchased_ids.has(_shop_offer_key(reward))
 		reward_buttons[i].visible = true
 		reward_buttons[i].disabled = sold or run_cash < cost
-		reward_buttons[i].custom_minimum_size = Vector2(820, 80)
+		reward_buttons[i].custom_minimum_size = Vector2(820, 74)
 		_set_button_font_size(reward_buttons[i], 18)
 		reward_buttons[i].set_meta("reward", reward)
-		reward_buttons[i].text = _shop_card_text(reward)
+		reward_buttons[i].text = _shop_card_text_with_icon_padding(reward)
 		reward_buttons[i].tooltip_text = _shop_tooltip_text(reward)
+		reward_buttons[i].icon = null
+		_set_shop_button_sprite(reward_buttons[i], &"sold_seal" if sold else _shop_offer_icon_id(reward), Vector2(42, 42))
 		_apply_reward_button_style(reward_buttons[i], reward)
+	_sync_shop_reroll_button()
+	continue_button.custom_minimum_size = Vector2(820, 58)
+	_set_button_font_size(continue_button, 23)
 
 func _shop_summary_text() -> String:
 	var lines: Array[String] = []
 	lines.append(_cash_status_text() + " | Soul markers " + str(run_health))
 	lines.append(_compact_next_table_pressure_text())
-	lines.append("Buy any upgrades you can afford. Cash carries if you skip.")
+	lines.append("Three fixed offers. Reroll costs $" + str(_shop_reroll_cost()) + " Bankroll and replaces the shelf.")
 	return "\n".join(lines)
 
-func _shop_upgrade_choices() -> Array[Dictionary]:
+func _shop_upgrade_choices(choice_count: int = SHOP_OFFER_COUNT) -> Array[Dictionary]:
 	var depth := maxi(0, table_index)
+	var tier := _table_tier(current_table)
+	var base_pool: Array[Dictionary] = [
+		{"type": &"shop_upgrade", "id": &"needle_tithe", "cost": 7 + depth, "perfect": 1},
+		{"type": &"shop_upgrade", "id": &"grave_bet_slip", "cost": 7 + depth, "called": 1},
+		{"type": &"shop_upgrade", "id": &"rail_debt", "cost": 7 + depth, "rail": 1},
+		{"type": &"shop_upgrade", "id": &"rack_rite", "cost": 7 + depth, "cluster": 1},
+		{"type": &"shop_upgrade", "id": &"dare_lure", "cost": 8 + depth + tier, "dare": 1},
+		{"type": &"shop_upgrade", "id": &"gold_skim_shop", "cost": 6 + depth, "cash": 1},
+		{"type": &"shop_upgrade", "id": &"anchor_tax", "cost": 8 + depth + tier, "anchor": 1},
+		{"type": &"shop_upgrade", "id": &"black_abacus", "cost": 13 + depth * 2 + tier, "break": 1},
+		{"type": &"shop_upgrade", "id": &"aim_tune", "cost": 7 + depth, "aim": 0.12},
+		{"type": &"shop_upgrade", "id": &"power_wrap", "cost": 8 + depth, "power": 0.07},
+		{"type": &"shop_upgrade", "id": &"buy_ball", "cost": 10 + depth * 2, "health": 1},
+		{"type": &"shop_upgrade", "id": &"chalk_case", "cost": 5 + depth, "chalk": _roll_contextual_chalk_id()}
+	]
 	var choices: Array[Dictionary] = []
-	choices.append({"type": &"shop_upgrade", "id": &"aim_tune", "cost": 7 + depth, "aim": 0.12})
-	choices.append({"type": &"shop_upgrade", "id": &"power_wrap", "cost": 8 + depth, "power": 0.07})
-	choices.append({"type": &"shop_upgrade", "id": &"buy_ball", "cost": 10 + depth * 2, "health": 1})
-	choices.append({"type": &"shop_upgrade", "id": &"chalk_case", "cost": 5 + depth, "chalk": _roll_contextual_chalk_id()})
+	while choices.size() < choice_count and not base_pool.is_empty():
+		var index := reward_rng.randi_range(0, base_pool.size() - 1)
+		choices.append(base_pool[index])
+		base_pool.remove_at(index)
 	return choices
+
+func _roll_shop_inventory() -> void:
+	current_shop_offers = _shop_upgrade_choices(SHOP_OFFER_COUNT)
+	shop_purchased_ids.clear()
+
+func _shop_offer_key(reward: Dictionary) -> StringName:
+	return reward.get("id", &"")
+
+func _shop_offer_icon_id(reward: Dictionary) -> StringName:
+	match reward.get("id", &""):
+		&"black_abacus", &"anchor_tax", &"dare_lure":
+			return &"shop_counter"
+		_:
+			return &"offer_card"
+
+func _shop_reroll_cost() -> int:
+	return SHOP_REROLL_BASE_COST + _table_tier(current_table) + shop_rerolls_this_table
+
+func _sync_shop_reroll_button() -> void:
+	if shop_reroll_button == null:
+		return
+	var cost := _shop_reroll_cost()
+	shop_reroll_button.visible = true
+	shop_reroll_button.disabled = run_cash < cost
+	shop_reroll_button.text = "Reroll shelf  |  Pay $" + str(cost)
+	shop_reroll_button.tooltip_text = "Pay $" + str(cost) + " Bankroll to replace all three shop offers."
+	shop_reroll_button.icon = _store_atlas_texture(&"reroll_token")
+	_apply_action_button_style(shop_reroll_button, Color(0.36, 1.0, 1.0), false)
+
+func _on_shop_reroll_pressed() -> void:
+	if reward_panel_mode != &"shop" or not reward_panel.visible:
+		return
+	var cost := _shop_reroll_cost()
+	if run_cash < cost:
+		_show_float("Short Bankroll", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.34, 0.24), 24)
+		_sync_shop_reroll_button()
+		return
+	_apply_cash_delta(-cost)
+	shop_rerolls_this_table += 1
+	_roll_shop_inventory()
+	_play_audio_cue(&"reward")
+	_show_float("Shelf rerolled", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(0.42, 1.0, 0.92), 24)
+	_show_table_shop()
+
+func _take_shop_upgrade_from_pool(pool: Array[Dictionary], id: StringName) -> Dictionary:
+	for i in range(pool.size()):
+		if pool[i].get("id", &"") == id:
+			var picked: Dictionary = pool[i]
+			pool.remove_at(i)
+			return picked
+	return {}
+
+func _future_table_has_ball_kind(kind: StringName, lookahead: int = 3) -> bool:
+	var final_index := _run_final_table_index()
+	for i in range(table_index + 1, mini(tables.size(), mini(final_index + 1, table_index + 1 + lookahead))):
+		var table: Dictionary = tables[i]
+		var ball_specs: Array = table.get("balls", [])
+		for spec in ball_specs:
+			if StringName(spec.get("kind", &"normal")) == kind:
+				return true
+	return false
+
+func _future_anchor_table_is_near(lookahead: int = 4) -> bool:
+	var final_index := _run_final_table_index()
+	for i in range(table_index + 1, mini(tables.size(), mini(final_index + 1, table_index + 1 + lookahead))):
+		if StringName((tables[i] as Dictionary).get("objective", &"")) == &"boss":
+			return true
+	return false
 
 func _shop_card_text(reward: Dictionary) -> String:
 	var cost := int(reward.get("cost", 0))
 	var label := _shop_upgrade_title(reward)
 	var status := "Buy $" + str(cost)
-	if shop_purchased_ids.has(reward.get("id", &"")):
+	if shop_purchased_ids.has(_shop_offer_key(reward)):
 		status = "Sold"
 	elif run_cash < cost:
 		status = "Need $" + str(cost)
-	return label + "  |  " + status + "\n" + _one_line(_shop_upgrade_effect(reward), 90)
+	var stack_text := _shop_upgrade_stack_text(reward.get("id", &""))
+	return label + "  |  " + status + "\n" + _one_line(_shop_upgrade_effect(reward) + " " + stack_text, 96)
+
+func _shop_card_text_with_icon_padding(reward: Dictionary) -> String:
+	const PAD := "              "
+	return PAD + _shop_card_text(reward).replace("\n", "\n" + PAD)
 
 func _shop_tooltip_text(reward: Dictionary) -> String:
 	var lines: Array[String] = []
 	lines.append(_shop_upgrade_title(reward))
 	lines.append(_shop_upgrade_effect(reward))
-	if shop_purchased_ids.has(reward.get("id", &"")):
+	lines.append(_shop_upgrade_stack_text(reward.get("id", &"")))
+	if shop_purchased_ids.has(_shop_offer_key(reward)):
 		lines.append("Already bought from this shop.")
 	else:
-		lines.append("Cash after purchase: $" + str(maxi(0, run_cash - int(reward.get("cost", 0)))))
+		lines.append("Bankroll after purchase: $" + str(maxi(0, run_cash - int(reward.get("cost", 0)))))
 	return "\n".join(lines)
 
 func _shop_upgrade_title(reward: Dictionary) -> String:
 	match reward.get("id", &""):
+		&"needle_tithe":
+			return "Needle Tithe"
+		&"grave_bet_slip":
+			return "Grave Bet Slip"
+		&"rail_debt":
+			return "Cushion Debt"
+		&"rack_rite":
+			return "Rack Rite"
+		&"dare_lure":
+			return "Lucien's Lure"
+		&"gold_skim_shop":
+			return "Cashier's Gold Skim"
+		&"anchor_tax":
+			return "Anchor Tax"
+		&"black_abacus":
+			return "Black Abacus"
 		&"aim_tune":
 			return "Sightline Tuning"
 		&"power_wrap":
@@ -7619,29 +8969,100 @@ func _shop_upgrade_title(reward: Dictionary) -> String:
 
 func _shop_upgrade_effect(reward: Dictionary) -> String:
 	match reward.get("id", &""):
+		&"needle_tithe":
+			return "Balls that enter near pocket center gain +110 Rep and +$1 Bankroll per stack. Strong with Dead-Eye."
+		&"grave_bet_slip":
+			return "Called-pocket dare pots gain +70 Rep and +$1 Bankroll per stack. Strong with Bookie's Hook."
+		&"rail_debt":
+			return "Pots after a cushion bounce, or after the cue ball touches a cushion first, gain +90 Rep and +$1 Bankroll per stack."
+		&"rack_rite":
+			return "Hard Reputation shots gain +85 Rep per stack; shots that move four balls also pay +$1 Bankroll per stack."
+		&"dare_lure":
+			return "Lucien dare wins gain +60 Rep and +$1 Bankroll per stack before Double Dare multipliers."
+		&"gold_skim_shop":
+			return "Gold balls pay +$1 per stack for the rest of the run."
+		&"anchor_tax":
+			return "Anchor Eight hits gain +80 Rep per stack; the final pocket pays +$3 Bankroll per stack."
+		&"black_abacus":
+			return "Breaks the math: doubles all shop-bounty payouts per stack. Yes, this can get ridiculous."
 		&"aim_tune":
-			return "+12% aim preview for the rest of this run."
+			return "+12% aim preview for the rest of this run. Seer's Fork also gains one extra ball-bump read."
 		&"power_wrap":
 			return "+7% max power for break and long-table routes."
 		&"buy_ball":
-			return "+1 soul marker. It remains the run clock; Lucien counts every marker against your soul."
+			var gain := 2 if bool(_cue_def(selected_cue_id).get("scratch_place", false)) else 1
+			return "+" + str(gain) + " soul marker" + ("s" if gain != 1 else "") + ". Free Hand doubles this because it turns scratches into positioning."
 		&"chalk_case":
 			return "Add one " + _chalk_name(reward.get("chalk", &"")) + " to your belt."
 	return "A run-only upgrade."
 
+func _shop_upgrade_stack_text(id: StringName) -> String:
+	match id:
+		&"needle_tithe":
+			return "Current stack: x" + str(run_shop_perfect_tithe) + " -> x" + str(run_shop_perfect_tithe + 1)
+		&"grave_bet_slip":
+			return "Current stack: x" + str(run_shop_called_bounty) + " -> x" + str(run_shop_called_bounty + 1)
+		&"rail_debt":
+			return "Current stack: x" + str(run_shop_rail_debt) + " -> x" + str(run_shop_rail_debt + 1)
+		&"rack_rite":
+			return "Current stack: x" + str(run_shop_cluster_tithe) + " -> x" + str(run_shop_cluster_tithe + 1)
+		&"dare_lure":
+			return "Current stack: x" + str(run_shop_dare_lure) + " -> x" + str(run_shop_dare_lure + 1)
+		&"gold_skim_shop":
+			return "Current gold skim: +$" + str(run_contract_gold_skim) + " -> +$" + str(run_contract_gold_skim + 1)
+		&"anchor_tax":
+			return "Current stack: x" + str(run_shop_anchor_tax) + " -> x" + str(run_shop_anchor_tax + 1)
+		&"black_abacus":
+			return "Current multiplier: x" + str(_shop_break_multiplier()) + " -> x" + str(_shop_break_multiplier() * 2)
+		&"aim_tune":
+			return "Current aim bonus: +" + str(int(round(run_cue_aim_bonus * 100.0))) + "% -> +" + str(int(round((run_cue_aim_bonus + 0.12) * 100.0))) + "%"
+		&"power_wrap":
+			return "Current power bonus: +" + str(int(round(run_cue_power_bonus * 100.0))) + "% -> +" + str(int(round((run_cue_power_bonus + 0.07) * 100.0))) + "%"
+		&"buy_ball":
+			var gain := 2 if bool(_cue_def(selected_cue_id).get("scratch_place", false)) else 1
+			return "Soul markers now: " + str(run_health) + " -> " + str(mini(12, run_health + gain))
+		&"chalk_case":
+			return "Adds a one-shot chalk tool."
+	return "Stacks for this run when bought again in later shops."
+
 func _apply_shop_upgrade_choice(reward: Dictionary) -> bool:
 	var id: StringName = reward.get("id", &"")
-	if shop_purchased_ids.has(id):
+	var offer_key := _shop_offer_key(reward)
+	if shop_purchased_ids.has(offer_key):
 		_show_float("Sold out", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.72, 0.24), 24)
 		return false
 	var cost := int(reward.get("cost", 0))
 	if run_cash < cost:
-		_show_float("Short cash", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.34, 0.24), 24)
+		_show_float("Short Bankroll", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.34, 0.24), 24)
 		return false
 	_apply_cash_delta(-cost)
-	shop_purchased_ids[id] = true
+	shop_purchased_ids[offer_key] = true
 	_play_audio_cue(&"reward")
 	match id:
+		&"needle_tithe":
+			run_shop_perfect_tithe += int(reward.get("perfect", 1))
+			_show_float("Needle tithe x" + str(run_shop_perfect_tithe), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(0.82, 1.0, 0.86), 24)
+		&"grave_bet_slip":
+			run_shop_called_bounty += int(reward.get("called", 1))
+			_show_float("Called bounty x" + str(run_shop_called_bounty), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.78, 0.28), 24)
+		&"rail_debt":
+			run_shop_rail_debt += int(reward.get("rail", 1))
+			_show_float("Cushion debt x" + str(run_shop_rail_debt), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(0.36, 0.90, 1.0), 24)
+		&"rack_rite":
+			run_shop_cluster_tithe += int(reward.get("cluster", 1))
+			_show_float("Rack rite x" + str(run_shop_cluster_tithe), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.42, 0.16), 24)
+		&"dare_lure":
+			run_shop_dare_lure += int(reward.get("dare", 1))
+			_show_float("Dare lure x" + str(run_shop_dare_lure), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(0.95, 0.18, 1.0), 24)
+		&"gold_skim_shop":
+			run_contract_gold_skim += int(reward.get("cash", 1))
+			_show_float("Gold skim +$" + str(run_contract_gold_skim), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.88, 0.18), 24)
+		&"anchor_tax":
+			run_shop_anchor_tax += int(reward.get("anchor", 1))
+			_show_float("Anchor tax x" + str(run_shop_anchor_tax), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(0.88, 0.13, 1.0), 24)
+		&"black_abacus":
+			run_shop_black_abacus += int(reward.get("break", 1))
+			_show_float("Black Abacus x" + str(_shop_break_multiplier()), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.12, 0.18), 25)
 		&"aim_tune":
 			run_cue_aim_bonus += float(reward.get("aim", 0.0))
 			_show_float("Aim +" + str(int(round(float(reward.get("aim", 0.0)) * 100.0))) + "%", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(0.76, 0.96, 1.0), 24)
@@ -7649,8 +9070,11 @@ func _apply_shop_upgrade_choice(reward: Dictionary) -> bool:
 			run_cue_power_bonus += float(reward.get("power", 0.0))
 			_show_float("Power +" + str(int(round(float(reward.get("power", 0.0)) * 100.0))) + "%", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.78, 0.24), 24)
 		&"buy_ball":
-			run_health = clampi(run_health + int(reward.get("health", 0)), 0, 12)
-			_show_float("+1 MARKER", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.42, 0.72), 24)
+			var gain := int(reward.get("health", 0))
+			if bool(_cue_def(selected_cue_id).get("scratch_place", false)):
+				gain += 1
+			run_health = clampi(run_health + gain, 0, 12)
+			_show_float("+" + str(gain) + " MARKER" + ("S" if gain != 1 else ""), TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.42, 0.72), 24)
 		&"chalk_case":
 			var chalk_id: StringName = reward.get("chalk", &"")
 			_add_chalk(chalk_id)
@@ -7965,7 +9389,7 @@ func _reward_build_hint(reward: Dictionary) -> String:
 		&"chalk":
 			return "Next-shot tool"
 		&"favor":
-			return "Spend cash now"
+			return "Spend Bankroll now"
 		&"cue_work":
 			return "Run cue tuning"
 		&"contract":
@@ -7988,11 +9412,11 @@ func _reward_play_hint(reward: Dictionary) -> String:
 		&"cue_work":
 			match reward.get("id", &""):
 				&"sighted_tip":
-					return "longer aim lines for CALLED_POCKET and PERFECT_POT."
+					return "longer aim lines for called-pocket dares and center-pocket pots."
 				&"loaded_wrap":
-					return "stronger POWER_SHOT and CLUSTER_BREAK attempts."
+					return "stronger hard shots and four-ball scatters."
 				&"soft_bridge":
-					return "better English and safer SOFT_TOUCH lines."
+					return "better spin and safer gentle shots."
 				_:
 					return "run-only cue tuning."
 		&"contract":
@@ -8002,7 +9426,7 @@ func _reward_play_hint(reward: Dictionary) -> String:
 				&"soft_house_line":
 					return "one more shot on future rooms; Anchor HP is softened."
 				&"gold_skim":
-					return "more cash from gold-ball routing."
+					return "more Bankroll from gold-ball routing."
 				_:
 					return "future table leverage."
 		&"purge":
@@ -8125,7 +9549,7 @@ func _reward_context_hint(reward: Dictionary) -> String:
 			return "adds a new " + family + " angle to your current playbook."
 		&"cash":
 			if run_cash < 9:
-				return "cash keeps House Favor live when balls gets thin."
+				return "Bankroll keeps House Favor live when balls gets thin."
 			return "bankroll lets you buy favor and carry flexibility into harder rooms."
 		&"chalk":
 			return "one-shot tools let you solve a specific next-table route without changing the build."
@@ -8138,15 +9562,15 @@ func _reward_context_hint(reward: Dictionary) -> String:
 				&"chalk_case":
 					return "more chalk means more planned shots before the route turns ugly."
 				_:
-					return "spends cash now to lower run pressure."
+					return "spends Bankroll now to lower run pressure."
 		&"cue_work":
 			match reward.get("id", &""):
 				&"sighted_tip":
-					return "longer reads help called pockets, perfect pots, and tight boss finishes."
+					return "longer reads help called-pocket dares, center-pocket pots, and tight boss finishes."
 				&"loaded_wrap":
-					return "more top-end force helps cluster breaks, bumpers, and sticky-felt rooms."
+					return "more top-end force helps four-ball scatters, bumpers, and sticky-felt rooms."
 				&"soft_bridge":
-					return "softer low power helps avoid scratches and keeps cue control readable."
+					return "gentler low power helps avoid scratches and keeps cue control readable."
 				_:
 					return "run-only cue tuning for the next set of rooms."
 		&"contract":
@@ -8201,6 +9625,22 @@ func _reward_accent(reward: Dictionary) -> Color:
 	match reward.get("type", &""):
 		&"shop_upgrade":
 			match reward.get("id", &""):
+				&"needle_tithe":
+					return Color(0.82, 1.0, 0.86)
+				&"grave_bet_slip":
+					return Color(1.0, 0.78, 0.28)
+				&"rail_debt":
+					return Color(0.36, 0.90, 1.0)
+				&"rack_rite":
+					return Color(1.0, 0.42, 0.16)
+				&"dare_lure":
+					return Color(0.95, 0.18, 1.0)
+				&"gold_skim_shop":
+					return Color(1.0, 0.88, 0.18)
+				&"anchor_tax":
+					return Color(0.88, 0.13, 1.0)
+				&"black_abacus":
+					return Color(1.0, 0.12, 0.18)
 				&"aim_tune":
 					return Color(0.72, 0.96, 1.0)
 				&"power_wrap":
@@ -8244,7 +9684,7 @@ func _reward_description(reward: Dictionary) -> String:
 			var id: StringName = reward.get("id", &"")
 			return relic_engine.get_family_text(id) + "\n" + relic_engine.get_description(id)
 		&"cash":
-			return "Immediate money for the run."
+			return "Immediate Bankroll for the run."
 		&"chalk":
 			var id: StringName = reward.get("id", &"")
 			return _chalk_description(id) + "\nWants: " + _chalk_play_hint(id)
@@ -8263,22 +9703,22 @@ func _favor_description(reward: Dictionary) -> String:
 	var cost := int(reward.get("cost", 0))
 	match reward.get("id", &""):
 		&"ball_patch":
-			return "Pay $" + str(cost) + " to restore 1 soul marker."
+			return "Pay $" + str(cost) + " Bankroll to restore 1 soul marker."
 		&"style_tab":
-			return "Pay $" + str(cost) + " for +2 Style. Each Style adds +2% score, capped at x1.30."
+			return "Pay $" + str(cost) + " Bankroll for +2 Style. Each Style adds +2% Rep, capped at x1.30."
 		&"chalk_case":
-			return "Pay $" + str(cost) + " for a bonus " + _chalk_name(reward.get("chalk", &"")) + "."
+			return "Pay $" + str(cost) + " Bankroll for a bonus " + _chalk_name(reward.get("chalk", &"")) + "."
 		_:
-			return "Pay $" + str(cost) + " for a back-room advantage."
+			return "Pay $" + str(cost) + " Bankroll for a back-room advantage."
 
 func _cue_work_description(reward: Dictionary) -> String:
 	match reward.get("id", &""):
 		&"sighted_tip":
-			return "Run upgrade. Aim preview is 18% longer."
+			return "Run upgrade. Aim preview is 18% longer. Seer's Fork gains an extra ball-bump read."
 		&"loaded_wrap":
 			return "Run upgrade. Max shot power is 10% higher."
 		&"soft_bridge":
-			return "Run upgrade. English is stronger and lowest power is softer."
+			return "Run upgrade. Spin is stronger and your gentlest shots are easier to control."
 		_:
 			return "Run upgrade for this cue."
 
@@ -8333,7 +9773,7 @@ func _apply_reward_choice(reward: Dictionary) -> void:
 		&"favor":
 			var cost := int(reward.get("cost", 0))
 			if run_cash < cost:
-				_show_float("Short cash", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.34, 0.24), 24)
+				_show_float("Short Bankroll", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 34), Color(1.0, 0.34, 0.24), 24)
 				return
 			_apply_cash_delta(-cost)
 			match reward.get("id", &""):
@@ -8405,7 +9845,13 @@ func _show_run_complete() -> void:
 	reward_summary_scroll.scroll_vertical = 0
 	for button in reward_buttons:
 		button.visible = false
+		button.icon = null
+		_hide_shop_button_sprite(button)
+	if shop_reroll_button != null:
+		shop_reroll_button.visible = false
 	continue_button.visible = true
+	continue_button.custom_minimum_size = Vector2(820, 68)
+	_set_button_font_size(continue_button, 26)
 	continue_button.text = "Back to Menu"
 
 func _show_run_failed() -> void:
@@ -8429,7 +9875,13 @@ func _show_run_failed() -> void:
 	reward_summary_scroll.scroll_vertical = 0
 	for button in reward_buttons:
 		button.visible = false
+		button.icon = null
+		_hide_shop_button_sprite(button)
+	if shop_reroll_button != null:
+		shop_reroll_button.visible = false
 	continue_button.visible = true
+	continue_button.custom_minimum_size = Vector2(820, 68)
+	_set_button_font_size(continue_button, 26)
 	continue_button.text = "Back to Menu"
 
 func _run_end_summary(cleared_run: bool) -> String:
@@ -8441,9 +9893,9 @@ func _run_end_summary(cleared_run: bool) -> String:
 			verdict = "You beat Lucien at his own game. His Black Eight cracks, and his claim on your soul is broken."
 	lines.append(verdict)
 	if practice_run:
-		lines.append("Practice run: scores and completion stats are not written to the house record.")
+		lines.append("Practice run: Reputation and completion stats are not written to the house record.")
 	lines.append("Seed " + str(run_seed))
-	lines.append(_contract_route_name_text() + " | Rooms " + str(run_table_ledger.size()) + "/" + str(_run_table_goal_count()) + " | Score " + str(run_score) + " | Best " + str(best_run_score) + " | " + _cash_status_text() + " | Soul markers " + str(run_health))
+	lines.append(_contract_route_name_text() + " | Rooms " + str(run_table_ledger.size()) + "/" + str(_run_table_goal_count()) + " | Rep " + str(run_score) + " | Best Rep " + str(best_run_score) + " | " + _cash_status_text() + " | Soul markers " + str(run_health))
 	lines.append("Cue " + _cue_name(selected_cue_id) + " | Last room cloth " + _board_name(selected_board_id))
 	lines.append("Back Room Chips " + str(_meta_unspent_chips()) + "/" + str(meta_chips_total) + " | " + _meta_effect_summary())
 	if not practice_run and not last_table_chip_receipt.is_empty():
@@ -8473,7 +9925,7 @@ func _latest_chip_receipt_line() -> String:
 	var before := int(last_table_chip_receipt.get("before", 0))
 	var after := int(last_table_chip_receipt.get("after", 0))
 	var earned := int(last_table_chip_receipt.get("earned", 0))
-	return "Latest table marks: " + str(before) + "/" + str(rate) + " + " + str(score_amount) + " score -> +" + str(earned) + " mark(s), now " + str(after) + "/" + str(rate)
+	return "Latest table chips: " + str(before) + "/" + str(rate) + " + " + str(score_amount) + " Rep -> +" + str(earned) + " chip(s), now " + str(after) + "/" + str(rate)
 
 func _print_run_report_to_console(cleared_run: bool) -> void:
 	var header := "cleared" if cleared_run else "failed"
@@ -8499,14 +9951,29 @@ func _reset_cue_if_needed() -> void:
 
 func _find_cue_reset_position() -> Vector2:
 	var base := CUE_START
+	if bool(_cue_def(selected_cue_id).get("scratch_place", false)):
+		var margin := BALL_RADIUS * 1.75
+		var mouse_pos := get_global_mouse_position()
+		base = Vector2(
+			clampf(mouse_pos.x, TABLE_RECT.position.x + margin, TABLE_RECT.end.x - margin),
+			clampf(mouse_pos.y, TABLE_RECT.position.y + margin, TABLE_RECT.end.y - margin)
+		)
 	for i in range(20):
-		var candidate := base + Vector2(0, (i % 5 - 2) * 28)
+		var offset := Vector2((i / 5 - 1) * 34, (i % 5 - 2) * 28)
+		var candidate := base + offset
+		var margin := BALL_RADIUS * 1.35
+		candidate = Vector2(
+			clampf(candidate.x, TABLE_RECT.position.x + margin, TABLE_RECT.end.x - margin),
+			clampf(candidate.y, TABLE_RECT.position.y + margin, TABLE_RECT.end.y - margin)
+		)
 		var clear := true
 		for ball in _active_balls():
 			if ball.kind != &"cue" and ball.global_position.distance_to(candidate) < BALL_RADIUS * 2.7:
 				clear = false
 				break
 		if clear:
+			if bool(_cue_def(selected_cue_id).get("scratch_place", false)):
+				_show_float("FREE HAND SET", candidate + Vector2(0, -42), Color(1.0, 0.82, 0.28), 19)
 			return candidate
 	return base
 
@@ -8574,7 +10041,7 @@ func _reset_cue_spin() -> void:
 	_update_hud()
 
 func _toggle_call_pocket_mode() -> void:
-	if state != State.AIMING:
+	if state != State.AIMING or not _call_pocket_dare_active():
 		return
 	calling_pocket_mode = not calling_pocket_mode
 	var label := "CALL POCKET" if calling_pocket_mode else "CALL CLOSED"
@@ -8585,15 +10052,17 @@ func _set_called_pocket_from_mouse() -> void:
 	_set_called_pocket_from_position(get_global_mouse_position())
 
 func _set_called_pocket_from_position(point: Vector2) -> void:
+	if not _call_pocket_dare_active():
+		return
 	var pocket = _nearest_pocket(point)
 	if pocket == null:
-		called_pocket_id = &""
+		_clear_called_pocket()
 		_show_float("CALL CLEARED", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, -42), Color(0.72, 1.0, 0.95), 18)
 		_update_hud()
 		return
 	var distance: float = pocket.global_position.distance_to(point)
 	if distance > 72.0:
-		called_pocket_id = &""
+		_clear_called_pocket()
 		_show_float("CALL CLEARED", TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, -42), Color(0.72, 1.0, 0.95), 18)
 	else:
 		called_pocket_id = pocket.pocket_id
@@ -8602,9 +10071,18 @@ func _set_called_pocket_from_position(point: Vector2) -> void:
 	_update_hud()
 
 func _called_pocket_text() -> String:
+	if not _call_pocket_dare_active() and called_pocket_id == &"":
+		return "Called: dare only"
 	if called_pocket_id == &"":
 		return "Called: none"
 	return "Called: " + _pocket_display_name(called_pocket_id)
+
+func _clear_called_pocket() -> void:
+	called_pocket_id = &""
+	calling_pocket_mode = false
+
+func _call_pocket_dare_active() -> bool:
+	return lucien_dare_active and not lucien_dare_offer_pending and rival_intent == &"called"
 
 func _pocket_display_name(id: StringName) -> String:
 	match id:
@@ -8654,13 +10132,37 @@ func _spawn_pulse(pos: Vector2, color: Color, radius: float, max_radius: float) 
 	fx.add_child(pulse)
 
 func _show_float(text: String, pos: Vector2, color: Color, size: int = 24) -> void:
+	_show_float_motion(text, pos, color, size)
+
+func _show_float_motion(text: String, pos: Vector2, color: Color, size: int = 24, lifetime: float = 1.1, velocity: Vector2 = Vector2(0, -42)) -> void:
 	var scale := _juice_text_scale()
 	var label := FloatingText.new()
 	label.position = pos
 	var text_color := color
 	text_color.a *= clampf(0.72 + scale * 0.28, 0.0, 1.0)
-	label.setup(text, text_color, maxi(12, int(round(float(size) * scale))))
+	label.setup(text, text_color, maxi(12, int(round(float(size) * scale))), lifetime, velocity)
 	fx.add_child(label)
+
+func _show_final_score_float(score_amount: int) -> void:
+	var score_scale := _final_score_juice_scale(score_amount)
+	var anchor := TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 46.0)
+	var color := Color(0.72, 1.0, 0.66)
+	var size := maxi(24, int(round(30.0 * score_scale)))
+	var lifetime := 0.92 + score_scale * 0.24
+	var rise := 38.0 + score_scale * 30.0
+	_show_float_motion("+" + str(score_amount) + " REP", anchor, color, size, lifetime, Vector2(0.0, -rise))
+	_spawn_pulse(anchor + Vector2(0, 12), color, 22.0 * score_scale, 112.0 * score_scale)
+	if score_scale >= 1.25:
+		_spawn_pulse(anchor + Vector2(0, 12), Color(1.0, 0.86, 0.28), 14.0 * score_scale, 72.0 * score_scale)
+	if score_scale >= 1.55:
+		_play_audio_cue(&"reward", clampf(0.18 + score_scale * 0.28, 0.0, 0.86))
+	shake_amount = maxf(shake_amount, (1.4 + score_scale * 2.6) * _juice_shake_scale())
+
+func _final_score_juice_scale(score_amount: int) -> float:
+	var amount := maxf(0.0, float(score_amount))
+	var main_scale := sqrt(clampf(amount / 1600.0, 0.0, 1.0))
+	var over_scale := clampf((amount - 1600.0) / 3400.0, 0.0, 1.0)
+	return 0.9 + main_scale * 0.85 + over_scale * 0.35
 
 func _tick_audio_cooldowns(delta: float) -> void:
 	var expired: Array[StringName] = []
@@ -8822,13 +10324,27 @@ func _run_upgrade_summary() -> String:
 	if run_cue_power_bonus > 0.0:
 		parts.append("Power +" + str(int(round(run_cue_power_bonus * 100.0))) + "%")
 	if run_cue_spin_bonus > 0.0:
-		parts.append("English +" + str(int(round(run_cue_spin_bonus * 100.0))) + "%")
+		parts.append("Spin +" + str(int(round(run_cue_spin_bonus * 100.0))) + "%")
 	if run_contract_extra_shots > 0:
 		parts.append("Shots +" + str(run_contract_extra_shots))
 	if run_contract_score_ease > 0.0:
 		parts.append("Soft Line +1 shot")
 	if run_contract_gold_skim > 0:
 		parts.append("Gold +$" + str(run_contract_gold_skim))
+	if run_shop_perfect_tithe > 0:
+		parts.append("Needle tithe x" + str(run_shop_perfect_tithe))
+	if run_shop_called_bounty > 0:
+		parts.append("Called bounty x" + str(run_shop_called_bounty))
+	if run_shop_rail_debt > 0:
+		parts.append("Cushion debt x" + str(run_shop_rail_debt))
+	if run_shop_cluster_tithe > 0:
+		parts.append("Rack rite x" + str(run_shop_cluster_tithe))
+	if run_shop_dare_lure > 0:
+		parts.append("Dare lure x" + str(run_shop_dare_lure))
+	if run_shop_anchor_tax > 0:
+		parts.append("Anchor tax x" + str(run_shop_anchor_tax))
+	if run_shop_black_abacus > 0:
+		parts.append("Black Abacus x" + str(_shop_break_multiplier()))
 	if run_curse_ward > 0:
 		parts.append("Risk Guard " + str(run_curse_ward))
 	if parts.is_empty():
@@ -8854,9 +10370,12 @@ func _table_dossier_text() -> String:
 func _table_clear_objective_text(table_def: Dictionary) -> String:
 	if StringName(table_def.get("objective", &"clear_rack")) == &"boss":
 		return String(table_def.get("objective_text", "Break the shield, damage the Anchor Eight, then pot it."))
-	return "Clear every object ball. Score is a bonus and feeds Back Room Chips."
+	return "Clear every object ball. Reputation is mastery progress that feeds Back Room Chips."
 
 func _intro_room_rule_text(table_def: Dictionary) -> String:
+	var variant_rule := String(table_def.get("variant_rule", ""))
+	if variant_rule != "":
+		return variant_rule
 	var modifier: StringName = table_def.get("modifier", &"classic")
 	match modifier:
 		&"classic":
@@ -8864,17 +10383,22 @@ func _intro_room_rule_text(table_def: Dictionary) -> String:
 		&"jackpot":
 			return "Hot " + String(table_def.get("jackpot_pocket", &"?")) + " pocket pays extra."
 		&"bank_bonus":
-			return "Bank and kick pots pay; direct pots are taxed."
+			return "Cushion-bounce pots and cue-first cushion pots pay; straight-in pots are taxed."
 		&"collision_bonus":
-			return "Hard impacts and caroms pay extra."
+			return "Hard impacts and cue-ball two-touches pay extra."
 		&"gold_rush":
 			return "Gold bonus expires after shot " + str(int(table_def.get("gold_expires_after", 0))) + "."
 		&"tag_trial":
-			return "BANK and CAROM tags pay bonus."
+			return "Cushion-bounce pot and cue-ball two-touch tags pay bonus."
 		&"sticky_felt":
 			return "Sticky zones slow timid routes."
 		&"boss":
-			return "Marked balls break the shield; called finish required."
+			match StringName(table_def.get("boss_mode", &"")):
+				&"shrink_eight":
+					return "The Black Eight starts too large for the pockets; three hard hits shrink it."
+				&"teleport_eight":
+					return "Lucien's final Eight teleports after hard hits; shield balls must still be cleared."
+			return "Marked balls break the shield; pot the vulnerable Eight to finish."
 		_:
 			return _modifier_display_text(modifier)
 
@@ -8887,6 +10411,8 @@ func _intro_watch_text(table_def: Dictionary) -> String:
 		parts.append("Risk x" + str(int(counts.get(&"risk", 0))))
 	if int(counts.get(&"bomb", 0)) > 0:
 		parts.append("Bomb x" + str(int(counts.get(&"bomb", 0))))
+	if int(counts.get(&"glass", 0)) > 0:
+		parts.append("Glass x" + str(int(counts.get(&"glass", 0))))
 	if int(counts.get(&"marked", 0)) > 0:
 		parts.append("Marked x" + str(int(counts.get(&"marked", 0))))
 	var bumper_count := Array(table_def.get("bumpers", [])).size()
@@ -8917,6 +10443,11 @@ func _table_hazard_text(table_def: Dictionary) -> String:
 	var bumper_count := Array(table_def.get("bumpers", [])).size()
 	if bumper_count > 0:
 		hazards.append("bumper x" + str(bumper_count))
+	var barrier_count := Array(table_def.get("barriers", [])).size()
+	if barrier_count > 0:
+		hazards.append("barrier x" + str(barrier_count))
+	if float(table_def.get("pocket_scale", 1.0)) < 0.95:
+		hazards.append("small pockets")
 	if hazards.is_empty():
 		return ""
 	return "Hazards " + ", ".join(hazards)
@@ -8932,6 +10463,8 @@ func _table_piece_dossier_text(table_def: Dictionary) -> String:
 		specials.append("risk ball x" + str(int(counts.get(&"risk", 0))))
 	if int(counts.get(&"bomb", 0)) > 0:
 		specials.append("bomb B x" + str(int(counts.get(&"bomb", 0))))
+	if int(counts.get(&"glass", 0)) > 0:
+		specials.append("glass x" + str(int(counts.get(&"glass", 0))))
 	if int(counts.get(&"boss", 0)) > 0:
 		specials.append("Anchor Eight HP " + str(int(table_def.get("boss_health", boss_health))))
 	if int(counts.get(&"marked", 0)) > 0:
@@ -8947,6 +10480,7 @@ func _table_piece_counts(table_def: Dictionary) -> Dictionary:
 		&"gold": 0,
 		&"risk": 0,
 		&"bomb": 0,
+		&"glass": 0,
 		&"boss": 0,
 		&"marked": 0
 	}
@@ -9022,7 +10556,7 @@ func _table_play_hint(table_def: Dictionary) -> String:
 		&"bank_bonus":
 			return "BANK and KICK lines"
 		&"collision_bonus":
-			return "CAROM, KISS, and controlled impact"
+			return "cue-ball two-touches, object-ball nudges, and controlled impact"
 		&"gold_rush":
 			return "early gold routes before expiry"
 		&"tag_trial":
@@ -9032,10 +10566,10 @@ func _table_play_hint(table_def: Dictionary) -> String:
 		&"boss":
 			var risk_pocket: StringName = _table_risk_pocket(table_def)
 			if risk_pocket != &"":
-				return "marked balls, Anchor hits, called finish, avoid " + String(risk_pocket)
-			return "marked balls, Anchor hits, then a called finish"
+				return "marked balls, Anchor hits, pot the vulnerable Eight, avoid " + String(risk_pocket)
+			return "marked balls, Anchor hits, then pot the vulnerable Eight"
 		_:
-			return "clean POT, BANK, and CALLED_POCKET tests"
+			return "clean pots, cushion-bounce pots, and called-pocket dare tests"
 
 func _modifier_display_text(modifier: StringName) -> String:
 	match modifier:
@@ -9044,9 +10578,9 @@ func _modifier_display_text(modifier: StringName) -> String:
 		&"jackpot":
 			return "One glowing pocket pays triple."
 		&"bank_bonus":
-			return "Bank pots score higher; direct pots are taxed."
+			return "Cushion-bounce pots earn more Reputation; straight-in pots are taxed."
 		&"collision_bonus":
-			return "Hard impacts add bar-fight score."
+			return "Hard impacts add bar-fight Reputation."
 		&"gold_rush":
 			return "Gold balls expire on a timer."
 		&"tag_trial":
@@ -9093,9 +10627,9 @@ func _table_reward_case_text(table_def: Dictionary) -> String:
 		3:
 			return "Lucien's anchor vault. Rare relics are heavily favored if the run continues."
 		2:
-			return "Elite side case. Four offers, richer cash, stronger rare relic odds."
+			return "Elite side case. Four offers, richer Bankroll, stronger rare relic odds."
 		_:
-			return "House drawer. Three offers, standard cash and relic odds."
+			return "House drawer. Three offers, standard Bankroll and relic odds."
 
 func _route_tracker_text() -> String:
 	if tables.is_empty():
@@ -9286,18 +10820,12 @@ func _draw() -> void:
 	_draw_table_rule_stamps(accent)
 	draw_rect(Rect2(TABLE_RECT.position - Vector2(RAIL_THICKNESS + 12.0, RAIL_THICKNESS + 12.0), TABLE_RECT.size + Vector2((RAIL_THICKNESS + 12.0) * 2.0, (RAIL_THICKNESS + 12.0) * 2.0)), outer_color)
 	draw_rect(Rect2(TABLE_RECT.position - Vector2(RAIL_THICKNESS, RAIL_THICKNESS), TABLE_RECT.size + Vector2(RAIL_THICKNESS * 2.0, RAIL_THICKNESS * 2.0)), rail_color)
-	draw_rect(TABLE_RECT, felt)
+	_draw_table_felt_surface(felt, accent)
 	_draw_pixel_table_trim(accent)
 	_draw_relic_field_effects(accent)
 	_draw_table_modifier_visuals(accent)
 	_draw_call_pocket_mode(accent)
 	_draw_called_pocket_marker(accent)
-	for i in range(9):
-		var x := TABLE_RECT.position.x + i * TABLE_RECT.size.x / 8.0
-		draw_line(Vector2(x, TABLE_RECT.position.y), Vector2(x - 70, TABLE_RECT.end.y), Color(accent.r, accent.g, accent.b, 0.055), 1.4)
-	for j in range(5):
-		var y := TABLE_RECT.position.y + j * TABLE_RECT.size.y / 4.0
-		draw_line(Vector2(TABLE_RECT.position.x, y), Vector2(TABLE_RECT.end.x, y + 54), Color(1, 1, 1, 0.035), 1.0)
 	_draw_last_ball_drama(accent)
 	_draw_fire_trails()
 	_draw_score_trails()
@@ -9311,22 +10839,38 @@ func _draw() -> void:
 	_draw_hovered_ball_ring(accent)
 	_draw_power_and_aim(accent)
 
+func _draw_table_felt_surface(felt: Color, accent: Color) -> void:
+	draw_rect(TABLE_RECT, felt.darkened(0.20))
+	_draw_table_sprite(&"tile_felt", TABLE_RECT, Color(felt.r * 3.0, felt.g * 3.0, felt.b * 3.0, 0.92))
+	draw_rect(TABLE_RECT, Color(felt.r, felt.g, felt.b, 0.18))
+	draw_rect(TABLE_RECT, Color(0.0, 0.0, 0.0, 0.05))
+	for i in range(9):
+		var x := TABLE_RECT.position.x + i * TABLE_RECT.size.x / 8.0
+		draw_line(Vector2(x, TABLE_RECT.position.y), Vector2(x - 70, TABLE_RECT.end.y), Color(accent.r, accent.g, accent.b, 0.014), 1.0)
+	for j in range(5):
+		var y := TABLE_RECT.position.y + j * TABLE_RECT.size.y / 4.0
+		draw_line(Vector2(TABLE_RECT.position.x, y), Vector2(TABLE_RECT.end.x, y + 54), Color(1, 1, 1, 0.008), 1.0)
+
 func _draw_pixel_table_trim(accent: Color) -> void:
 	var top_rail := Rect2(TABLE_RECT.position + Vector2(POCKET_CORNER_GAP, -RAIL_THICKNESS - 3.0), Vector2(TABLE_RECT.size.x - POCKET_CORNER_GAP * 2.0, 38.0))
 	var bottom_rail := Rect2(TABLE_RECT.position + Vector2(POCKET_CORNER_GAP, TABLE_RECT.size.y + 3.0), Vector2(TABLE_RECT.size.x - POCKET_CORNER_GAP * 2.0, 38.0))
-	_draw_table_sprite(&"rail_wide", top_rail, Color(1.0, 1.0, 1.0, 0.78))
-	_draw_table_sprite(&"rail_wide", bottom_rail, Color(1.0, 1.0, 1.0, 0.78))
+	draw_rect(top_rail, Color(0.010, 0.007, 0.012, 0.58))
+	draw_rect(bottom_rail, Color(0.010, 0.007, 0.012, 0.58))
+	_draw_table_sprite_tiled(&"rail_wide", top_rail, Color(1.0, 1.0, 1.0, 0.46))
+	_draw_table_sprite_tiled(&"rail_wide", bottom_rail, Color(1.0, 1.0, 1.0, 0.46))
 	var left_rail := Rect2(TABLE_RECT.position + Vector2(-RAIL_THICKNESS - 3.0, POCKET_CORNER_GAP), Vector2(38.0, TABLE_RECT.size.y - POCKET_CORNER_GAP * 2.0))
 	var right_rail := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 3.0, POCKET_CORNER_GAP), Vector2(38.0, TABLE_RECT.size.y - POCKET_CORNER_GAP * 2.0))
-	draw_rect(left_rail, Color(0.018, 0.012, 0.020, 0.78))
-	draw_rect(right_rail, Color(0.018, 0.012, 0.020, 0.78))
+	draw_rect(left_rail, Color(0.010, 0.007, 0.012, 0.66))
+	draw_rect(right_rail, Color(0.010, 0.007, 0.012, 0.66))
+	_draw_table_sprite_tiled(&"tile_rail", left_rail, Color(1.0, 0.86, 0.46, 0.14), 38.0)
+	_draw_table_sprite_tiled(&"tile_rail", right_rail, Color(1.0, 0.86, 0.46, 0.14), 38.0)
 	for i in range(5):
 		var y := left_rail.position.y + 22.0 + i * ((left_rail.size.y - 44.0) / 4.0)
 		var seal_rect := Rect2(Vector2(left_rail.position.x - 5.0, y - 17.0), Vector2(48.0, 38.0))
-		_draw_table_sprite(&"separator_star", seal_rect, Color(1.0, 0.88, 0.48, 0.24))
+		_draw_table_sprite_fit(&"separator_star", seal_rect, Color(1.0, 0.88, 0.48, 0.12))
 		var right_seal := seal_rect
 		right_seal.position.x = right_rail.position.x - 5.0
-		_draw_table_sprite(&"separator_star", right_seal, Color(accent.r, accent.g, accent.b, 0.22))
+		_draw_table_sprite_fit(&"separator_star", right_seal, Color(accent.r, accent.g, accent.b, 0.12))
 	draw_rect(TABLE_RECT.grow(3.0), Color(0.0, 0.0, 0.0, 0.28), false, 2.0)
 	draw_rect(TABLE_RECT.grow(9.0), Color(accent.r, accent.g, accent.b, 0.20), false, 2.0)
 
@@ -9399,39 +10943,25 @@ func _draw_play_status_strip(accent: Color) -> void:
 	var strip_height := 110.0 if lucien_dare_active else 86.0
 	var strip := Rect2(TABLE_RECT.position + Vector2(0.0, TABLE_RECT.size.y + RAIL_THICKNESS + 10.0), Vector2(TABLE_RECT.size.x, strip_height))
 	draw_rect(strip, Color(0.006, 0.004, 0.008, 0.84))
-	_draw_ui_sprite(&"long_strip", strip, Color(1, 1, 1, 0.16))
+	_draw_ui_sprite_tiled(&"long_strip", strip, Color(1, 1, 1, 0.16))
 	draw_rect(strip, Color(accent.r, accent.g, accent.b, 0.50), false, 2.0)
 	var top_line := _contract_room_progress_text() + "  " + String(current_table.get("name", "Table"))
 	var survival_color := Color(1.0, 0.34, 0.28, 0.96) if run_health <= 2 else THEME_GOLD
 	draw_string(font, strip.position + Vector2(18.0, 28.0), top_line, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 36.0, 22, Color(1.0, 0.90, 0.62, 0.95))
 	_draw_soul_marker_icon(strip.position + Vector2(34.0, 64.0), 16.0, survival_color)
 	draw_string(font, strip.position + Vector2(58.0, 67.0), "Soul markers " + str(run_health), HORIZONTAL_ALIGNMENT_LEFT, 230.0, 31, survival_color)
-	_draw_ui_sprite(&"cash_icon", Rect2(strip.position + Vector2(294.0, 46.0), Vector2(36.0, 27.0)), Color.WHITE)
+	_draw_ui_sprite_fit(&"cash_icon", Rect2(strip.position + Vector2(294.0, 46.0), Vector2(36.0, 27.0)), Color.WHITE)
 	draw_string(font, strip.position + Vector2(338.0, 65.0), _cash_status_text(), HORIZONTAL_ALIGNMENT_LEFT, 110.0, 27, Color(0.72, 1.0, 0.76, 0.96))
 	var right_line_y := 91.0 if lucien_dare_active else 65.0
 	var right_line := "Score " + str(table_score) + "   Shot " + str(table_shots_used + 1) + "   " + _whiff_marker_clock_text() + "   " + _called_pocket_text()
 	draw_string(font, strip.position + Vector2(468.0, right_line_y), right_line, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 486.0, 22, Color(0.86, 0.96, 1.0, 0.92))
 
 func _draw_soul_marker_icon(center: Vector2, size: float, color: Color) -> void:
-	var points: PackedVector2Array = [
-		center + Vector2(0.0, -size),
-		center + Vector2(size * 0.66, -size * 0.18),
-		center + Vector2(size * 0.42, size * 0.82),
-		center + Vector2(0.0, size),
-		center + Vector2(-size * 0.42, size * 0.82),
-		center + Vector2(-size * 0.66, -size * 0.18)
-	]
-	draw_colored_polygon(points, Color(0.028, 0.018, 0.030, 0.95))
-	for i in range(points.size()):
-		draw_line(points[i], points[(i + 1) % points.size()], Color(color.r, color.g, color.b, 0.76), 2.0)
-	draw_circle(center, size * 0.28, Color(0.72, 1.0, 0.90, 0.56))
-	draw_arc(center, size * 0.46, -PI * 0.15, PI * 1.15, 24, Color(1.0, 0.82, 0.28, 0.54), 1.5)
+	_draw_ui_sprite_fit(&"soul_marker", Rect2(center - Vector2(size * 0.76, size * 0.88), Vector2(size * 1.52, size * 1.76)), Color(color.r, color.g, color.b, 0.96))
 
 func _draw_status_glyph(center: Vector2, radius: float, label: String, color: Color) -> void:
 	var font := ThemeDB.fallback_font
-	draw_circle(center, radius, Color(0.012, 0.008, 0.014, 0.98))
-	draw_arc(center, radius - 1.0, 0.0, TAU, 32, Color(color.r, color.g, color.b, 0.88), 2.0)
-	draw_arc(center, radius * 0.62, -PI * 0.25, PI * 1.05, 24, Color(0.56, 1.0, 0.88, 0.34), 1.2)
+	_draw_prop_sprite_fit(&"call_token", Rect2(center - Vector2(radius, radius) * 1.18, Vector2(radius * 2.36, radius * 2.36)), Color(color.r, color.g, color.b, 0.82))
 	draw_string(font, center + Vector2(-radius, radius * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, int(radius * 1.05), Color(color.r, color.g, color.b, 0.98))
 
 func _draw_eye_glyph(center: Vector2, width: float, color: Color) -> void:
@@ -9473,9 +11003,17 @@ func _draw_lucien_dare_panel(accent: Color) -> void:
 	draw_rect(chip, Color(active_color.r, active_color.g, active_color.b, 0.56 + (0.18 * pulse if lucien_dare_active else 0.0)), false, 2.0)
 	if lucien_dare_active:
 		_draw_status_glyph(chip.position + Vector2(29.0, 27.0), 17.0, _dare_glyph_label(rival_intent), active_color)
-		draw_string(font, chip.position + Vector2(54.0, 20.0), "Lucien's Dare: " + _rival_intent_detail(rival_intent), HORIZONTAL_ALIGNMENT_LEFT, chip.size.x - 64.0, 15, Color(1.0, 0.90, 0.42, 0.98))
-		var reward_text := "Reward: +" + str(_lucien_dare_score_reward()) + " score, +$" + str(_lucien_dare_cash_reward())
-		var miss_text := "Miss: Warning +1; 2 warnings = MARKER CLAIMED"
+		var heading := "Lucien's Dare: " + _rival_intent_detail(rival_intent)
+		if lucien_dare_offer_pending:
+			heading = "Lucien is calling the shot"
+		draw_string(font, chip.position + Vector2(54.0, 20.0), heading, HORIZONTAL_ALIGNMENT_LEFT, chip.size.x - 64.0, 15, Color(1.0, 0.90, 0.42, 0.98))
+		var reward_text := "Reward: +" + str(_lucien_dare_score_reward()) + " Rep, +$" + str(_lucien_dare_cash_reward()) + ", full marks"
+		var miss_text := ""
+		if lucien_dare_doubled:
+			reward_text += ", rare relic"
+			miss_text = "Miss: half current marks"
+		else:
+			miss_text = "Miss: no dare penalty"
 		draw_string(font, chip.position + Vector2(54.0, 42.0), reward_text + " | " + miss_text, HORIZONTAL_ALIGNMENT_LEFT, chip.size.x - 64.0, 12, Color(0.86, 0.96, 1.0, 0.92))
 	else:
 		_draw_eye_glyph(chip.position + Vector2(23.0, 16.0), 22.0, active_color)
@@ -9490,6 +11028,8 @@ func _call_pocket_button_rect() -> Rect2:
 
 func _draw_call_pocket_button(accent: Color) -> void:
 	if current_table.is_empty() or (state != State.AIMING and state != State.CHARGING_SHOT):
+		return
+	if not _call_pocket_dare_active():
 		return
 	var font := ThemeDB.fallback_font
 	var rect := _call_pocket_button_rect()
@@ -9506,7 +11046,7 @@ func _draw_call_pocket_button(accent: Color) -> void:
 	draw_string(font, rect.position + Vector2(38.0, 21.0), label, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 44.0, 14, Color(1.0, 0.90, 0.46, 0.96))
 
 func _draw_call_pocket_mode(accent: Color) -> void:
-	if not calling_pocket_mode:
+	if not calling_pocket_mode or not _call_pocket_dare_active():
 		return
 	var font := ThemeDB.fallback_font
 	var pulse := 0.5 + 0.5 * sin(room_pulse * 6.8)
@@ -9540,7 +11080,7 @@ func _pocket_label_rect(id: StringName, pos: Vector2) -> Rect2:
 	return Rect2(pos + Vector2(44.0, -34.0), size)
 
 func _active_dare_needs_called_pocket() -> bool:
-	return lucien_dare_active and rival_intent == &"called"
+	return _call_pocket_dare_active()
 
 func _dare_icon_id(intent: StringName) -> StringName:
 	match intent:
@@ -9589,27 +11129,30 @@ func _draw_lucien_presence(accent: Color) -> void:
 		return
 	var pos := TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 136.0, 28.0)
 	var pulse := 0.5 + 0.5 * sin(room_pulse * 2.1)
-	var portrait := Rect2(pos + Vector2(-62.0, -8.0), Vector2(132.0, 108.0))
-	draw_circle(pos + Vector2(0.0, 44.0), 68.0 + pulse * 5.0, Color(accent.r, accent.g, accent.b, 0.040 + pulse * 0.020))
-	draw_rect(portrait.grow(10.0), Color(0.006, 0.004, 0.012, 0.68))
-	_draw_table_sprite(&"lucien_portrait", portrait, Color(1.0, 1.0, 1.0, 0.86))
-	_draw_table_sprite(&"lucien_eyes", Rect2(pos + Vector2(-52.0, 18.0), Vector2(116.0, 40.0)), Color(0.74, 1.0, 0.90, 0.64 + pulse * 0.22))
-	_draw_table_sprite(&"cue_stick", Rect2(pos + Vector2(-112.0, 96.0), Vector2(205.0, 22.0)), Color(1.0, 0.88, 0.52, 0.54))
-	_draw_table_sprite(&"wax_seal", Rect2(pos + Vector2(-24.0, 112.0), Vector2(42.0, 42.0)), Color(1.0, 0.78, 0.30, 0.76))
-	draw_rect(portrait.grow(5.0), Color(accent.r, accent.g, accent.b, 0.28), false, 2.0)
+	var glow := Color(accent.r, accent.g, accent.b, 0.050 + pulse * 0.024)
+	draw_circle(pos + Vector2(0.0, 48.0), 72.0 + pulse * 7.0, glow)
+	_draw_prop_sprite_fit(&"lucien_standing", Rect2(pos + Vector2(-78.0, -54.0), Vector2(156.0, 220.0)), Color(1.0, 1.0, 1.0, 0.76))
 	if StringName(current_table.get("objective", &"")) == &"boss":
 		draw_arc(pos + Vector2(0.0, 30.0), 60.0 + pulse * 8.0, 0.0, TAU, 64, Color(0.92, 0.10, 1.0, 0.34 + pulse * 0.18), 3.0)
 
 func _draw_room_signage(accent: Color) -> void:
 	var font := ThemeDB.fallback_font
-	var sign_rect := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5 - 190.0, -154.0), Vector2(380.0, 70.0))
+	var sign_rect := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5 - 216.0, -146.0), Vector2(432.0, 62.0))
 	var glow := 0.18 + 0.06 * sin(room_pulse * 2.2)
-	draw_rect(sign_rect.grow(8.0), Color(accent.r, accent.g, accent.b, glow))
-	_draw_table_sprite(&"table_plaque", Rect2(sign_rect.position - Vector2(18.0, 15.0), sign_rect.size + Vector2(36.0, 30.0)), Color(1.0, 1.0, 1.0, 0.92))
-	draw_rect(sign_rect.grow(-4.0), Color(0.006, 0.004, 0.010, 0.26))
-	draw_rect(sign_rect.grow(2.0), Color(accent.r, accent.g, accent.b, 0.54), false, 2.0)
-	draw_string(font, sign_rect.position + Vector2(18.0, 32.0), _room_sign_title(), HORIZONTAL_ALIGNMENT_CENTER, sign_rect.size.x - 36.0, 25, Color(1.0, 0.88, 0.40, 0.98))
-	draw_string(font, sign_rect.position + Vector2(18.0, 56.0), _room_sign_subtitle(), HORIZONTAL_ALIGNMENT_CENTER, sign_rect.size.x - 36.0, 15, Color(0.82, 1.0, 0.94, 0.86))
+	draw_rect(sign_rect.grow(12.0), Color(accent.r, accent.g, accent.b, glow))
+	draw_rect(sign_rect.grow(8.0), Color(0.012, 0.008, 0.014, 0.88))
+	draw_rect(sign_rect, Color(0.006, 0.004, 0.010, 0.94))
+	draw_rect(sign_rect, Color(accent.r, accent.g, accent.b, 0.54), false, 2.0)
+	var left_ornament := Rect2(sign_rect.position + Vector2(12.0, -8.0), Vector2(62.0, 78.0))
+	var right_ornament := Rect2(sign_rect.end - Vector2(74.0, 70.0), Vector2(62.0, 78.0))
+	_draw_table_sprite_fit(&"separator_skull", left_ornament, Color(1.0, 0.82, 0.42, 0.20))
+	_draw_table_sprite_fit(&"separator_skull", right_ornament, Color(accent.r, accent.g, accent.b, 0.18))
+	draw_rect(sign_rect.grow(-7.0), Color(0.006, 0.004, 0.010, 0.70))
+	draw_line(sign_rect.position + Vector2(80.0, sign_rect.size.y * 0.5), sign_rect.end - Vector2(80.0, sign_rect.size.y * 0.5), Color(1.0, 0.78, 0.30, 0.24), 1.0)
+	var title := _room_sign_title()
+	var title_font_size := 19 if title.length() > 17 else 22
+	draw_string(font, sign_rect.position + Vector2(66.0, 27.0), title, HORIZONTAL_ALIGNMENT_CENTER, sign_rect.size.x - 132.0, title_font_size, Color(1.0, 0.88, 0.40, 0.98))
+	draw_string(font, sign_rect.position + Vector2(56.0, 49.0), _room_sign_subtitle(), HORIZONTAL_ALIGNMENT_CENTER, sign_rect.size.x - 112.0, 12, Color(0.82, 1.0, 0.94, 0.86))
 
 func _room_sign_title() -> String:
 	match current_table.get("id", &""):
@@ -9677,24 +11220,18 @@ func _draw_chip_stack(center: Vector2, accent: Color) -> void:
 	for i in range(4):
 		var offset := Vector2(0.0, -float(i) * 6.0)
 		var color := accent if i % 2 == 0 else Color(1.0, 0.82, 0.28)
-		_draw_table_sprite(&"wax_seal", Rect2(center + offset - Vector2(19.0, 19.0), Vector2(38.0, 38.0)), Color(color.r, color.g, color.b, 0.70))
+		_draw_table_sprite_fit(&"wax_seal", Rect2(center + offset - Vector2(19.0, 19.0), Vector2(38.0, 38.0)), Color(color.r, color.g, color.b, 0.70))
 		draw_arc(center + offset, 17.0, 0.0, TAU, 36, Color(color.r, color.g, color.b, 0.50), 1.5)
 
 func _draw_floor_sigil(accent: Color) -> void:
 	var center := TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, TABLE_RECT.size.y + RAIL_THICKNESS + 108.0)
-	draw_arc(center, 68.0, 0.0, TAU, 72, Color(accent.r, accent.g, accent.b, 0.16), 2.0)
-	draw_arc(center, 44.0, -room_pulse * 0.18, TAU - room_pulse * 0.18, 54, Color(1.0, 0.78, 0.24, 0.10), 1.0)
-	for i in range(6):
-		var angle := TAU * float(i) / 6.0
-		var a := center + Vector2(cos(angle), sin(angle)) * 16.0
-		var b := center + Vector2(cos(angle), sin(angle)) * 62.0
-		draw_line(a, b, Color(0.92, 0.86, 0.72, 0.075), 1.0)
+	_draw_prop_sprite_fit(&"floor_sigil", Rect2(center - Vector2(82.0, 56.0), Vector2(164.0, 112.0)), Color(1.0, 1.0, 1.0, 0.34))
 
 func _draw_cashier_lamps(accent: Color) -> void:
 	for i in range(3):
 		var pos := TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 84.0, 120.0 + i * 92.0)
 		draw_circle(pos, 22.0, Color(1.0, 0.78, 0.16, 0.16 + 0.05 * sin(room_pulse * 2.0 + i)))
-		_draw_table_sprite(&"lantern_tall", Rect2(pos + Vector2(-19.0, -34.0), Vector2(38.0, 70.0)), Color(1.0, 0.92, 0.60, 0.72))
+		_draw_table_sprite_fit(&"lantern_tall", Rect2(pos + Vector2(-19.0, -34.0), Vector2(38.0, 70.0)), Color(1.0, 0.92, 0.60, 0.72))
 		draw_arc(pos, 18.0, PI, TAU, 24, Color(accent.r, accent.g, accent.b, 0.54), 2.0)
 
 func _draw_candles(accent: Color, chapel: bool) -> void:
@@ -9705,72 +11242,55 @@ func _draw_candles(accent: Color, chapel: bool) -> void:
 		if not chapel:
 			pos.x = TABLE_RECT.end.x + 122.0
 		draw_circle(pos, 12.0 + 2.0 * sin(room_pulse * 3.0 + i), Color(1.0, 0.56, 0.20, 0.22))
-		_draw_table_sprite(&"candle", Rect2(pos + Vector2(-18.0, -18.0), Vector2(36.0, 52.0)), Color(1.0, 0.96, 0.78, 0.82))
+		_draw_table_sprite_fit(&"candle", Rect2(pos + Vector2(-18.0, -18.0), Vector2(36.0, 52.0)), Color(1.0, 0.96, 0.78, 0.82))
 		draw_circle(pos + Vector2(0.0, -5.0), 4.5, Color(accent.r, accent.g, accent.b, 0.70))
 
 func _draw_rain_glass(accent: Color) -> void:
-	var pane := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 70.0, -24.0), Vector2(98.0, 326.0))
-	draw_rect(pane, Color(0.06, 0.12, 0.15, 0.48))
-	draw_rect(pane, Color(accent.r, accent.g, accent.b, 0.50), false, 2.0)
-	for i in range(12):
-		var x := pane.position.x + 12.0 + i * 7.0
-		draw_line(Vector2(x, pane.position.y + 18.0), Vector2(x - 20.0, pane.end.y - 14.0), Color(0.72, 1.0, 1.0, 0.22), 1.0)
+	var pane := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 28.0, -18.0), Vector2(128.0, 286.0))
+	_draw_prop_sprite_fit(&"rain_window", pane, Color(1.0, 1.0, 1.0, 0.54))
+	draw_rect(pane.grow(-18.0), Color(accent.r, accent.g, accent.b, 0.035), true)
 
 func _draw_mirror_frames(accent: Color) -> void:
 	for i in range(2):
-		var rect := Rect2(TABLE_RECT.position + Vector2(-154.0, 86.0 + i * 188.0), Vector2(84.0, 116.0))
-		draw_rect(rect, Color(0.10, 0.08, 0.12, 0.58))
-		draw_rect(rect, Color(1.0, 0.76, 0.96, 0.48), false, 3.0)
-		draw_line(rect.position + Vector2(10.0, 16.0), rect.end - Vector2(10.0, 22.0), Color(accent.r, accent.g, accent.b, 0.26), 2.0)
+		var rect := Rect2(TABLE_RECT.position + Vector2(-122.0, 82.0 + i * 178.0), Vector2(92.0, 126.0))
+		_draw_prop_sprite_fit(&"mirror_frame", rect, Color(1.0, 1.0, 1.0, 0.56))
 
 func _draw_tar_marks(accent: Color) -> void:
 	for i in range(5):
-		var pos := TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 76.0, 72.0 + i * 86.0)
-		draw_circle(pos, 24.0, Color(0.01, 0.01, 0.008, 0.62))
-		draw_arc(pos, 28.0, 0.4, TAU - 0.8, 28, Color(accent.r, accent.g, accent.b, 0.24), 2.0)
+		var pos := TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 42.0, 76.0 + i * 84.0)
+		_draw_prop_sprite_fit(&"tar_puddle", Rect2(pos - Vector2(32.0, 24.0), Vector2(64.0, 48.0)), Color(1.0, 1.0, 1.0, 0.48))
 
 func _draw_midnight_eye(accent: Color) -> void:
 	var pos := TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 126.0, TABLE_RECT.size.y * 0.5)
-	draw_circle(pos, 46.0, Color(0.02, 0.00, 0.03, 0.78))
-	draw_arc(pos, 38.0, -0.25, PI + 0.25, 40, Color(accent.r, accent.g, accent.b, 0.82), 4.0)
-	draw_circle(pos, 12.0 + 2.0 * sin(room_pulse * 2.2), Color(1.0, 0.82, 0.30, 0.72))
+	_draw_prop_sprite_fit(&"call_token", Rect2(pos - Vector2(56.0, 56.0), Vector2(112.0, 112.0)), Color(1.0, 1.0, 1.0, 0.72))
 
 func _draw_broken_cue_marks(accent: Color) -> void:
 	for i in range(4):
-		var pos := TABLE_RECT.position + Vector2(-164.0, 92.0 + i * 112.0)
-		draw_line(pos, pos + Vector2(82.0, 28.0), Color(0.84, 0.42, 0.16, 0.54), 4.0)
-		draw_line(pos + Vector2(48.0, -8.0), pos + Vector2(92.0, 36.0), Color(accent.r, accent.g, accent.b, 0.36), 2.0)
+		var pos := TABLE_RECT.position + Vector2(-106.0, 96.0 + i * 108.0)
+		_draw_prop_sprite_fit(&"broken_cues", Rect2(pos - Vector2(44.0, 38.0), Vector2(88.0, 76.0)), Color(1.0, 1.0, 1.0, 0.46))
 
 func _draw_bookie_slips(accent: Color) -> void:
 	for i in range(5):
-		var rect := Rect2(TABLE_RECT.position + Vector2(-156.0, 88.0 + i * 70.0), Vector2(72.0, 34.0))
-		draw_rect(rect, Color(0.16, 0.12, 0.08, 0.78))
-		draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.36), false, 1.0)
-		draw_line(rect.position + Vector2(10.0, 12.0), rect.end - Vector2(12.0, 22.0), Color(1.0, 0.86, 0.42, 0.34), 1.0)
+		var rect := Rect2(TABLE_RECT.position + Vector2(-118.0, 70.0 + i * 70.0), Vector2(76.0, 62.0))
+		_draw_prop_sprite_fit(&"bookie_slips", rect, Color(1.0, 1.0, 1.0, 0.48))
 
 func _draw_trial_chalk_marks(accent: Color) -> void:
-	var origin := TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 82.0, 90.0)
+	var origin := TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 44.0, 96.0)
 	for i in range(4):
 		var pos := origin + Vector2(0.0, i * 92.0)
-		draw_arc(pos, 24.0, 0.0, TAU, 36, Color(accent.r, accent.g, accent.b, 0.48), 2.0)
-		draw_line(pos + Vector2(-18.0, 0.0), pos + Vector2(18.0, 0.0), Color(0.92, 1.0, 0.94, 0.32), 1.0)
-		draw_line(pos + Vector2(0.0, -18.0), pos + Vector2(0.0, 18.0), Color(0.92, 1.0, 0.94, 0.32), 1.0)
+		_draw_prop_sprite_fit(&"chalk_mark", Rect2(pos - Vector2(30.0, 30.0), Vector2(60.0, 60.0)), Color(1.0, 1.0, 1.0, 0.46))
 
 func _draw_house_wall_marks(accent: Color, outer_color: Color) -> void:
-	var board := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 76.0, 90.0), Vector2(94.0, 256.0))
-	draw_rect(board, Color(outer_color.r * 0.8, outer_color.g * 0.8, outer_color.b * 0.8, 0.62))
-	draw_rect(board, Color(accent.r, accent.g, accent.b, 0.28), false, 2.0)
-	for i in range(6):
-		var y := board.position.y + 24.0 + i * 34.0
-		draw_line(Vector2(board.position.x + 12.0, y), Vector2(board.end.x - 12.0, y + 4.0), Color(1.0, 0.82, 0.30, 0.18), 1.0)
+	var board := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 36.0, 82.0), Vector2(106.0, 188.0))
+	_draw_prop_sprite_fit(&"ledger_board", board, Color(1.0, 1.0, 1.0, 0.48))
 
 func _draw_table_identity_badges(accent: Color) -> void:
-	var plaque := Rect2(TABLE_RECT.position + Vector2(14.0, -50.0), Vector2(360.0, 30.0))
+	var plaque := Rect2(TABLE_RECT.position + Vector2(14.0, -50.0), Vector2(430.0, 30.0))
 	draw_rect(plaque, Color(0.016, 0.012, 0.020, 0.86))
 	draw_rect(plaque, Color(accent.r, accent.g, accent.b, 0.58), false, 2.0)
 	var font := ThemeDB.fallback_font
 	var title := _contract_room_progress_text() + "  " + _table_tier_text(current_table) + "  " + String(current_table.get("name", "Table"))
-	draw_string(font, plaque.position + Vector2(12.0, 21.0), title, HORIZONTAL_ALIGNMENT_LEFT, plaque.size.x - 24.0, 17, Color(1.0, 0.90, 0.62, 0.95))
+	draw_string(font, plaque.position + Vector2(12.0, 21.0), title, HORIZONTAL_ALIGNMENT_LEFT, plaque.size.x - 24.0, 16, Color(1.0, 0.90, 0.62, 0.95))
 	var tier := _table_tier(current_table)
 	for i in range(3):
 		var pip_rect := Rect2(plaque.end - Vector2(76.0 - i * 22.0, 22.0), Vector2(14.0, 14.0))
@@ -9832,8 +11352,7 @@ func _draw_called_pocket_marker(accent: Color) -> void:
 		return
 	var pos: Vector2 = pocket.global_position
 	var font := ThemeDB.fallback_font
-	draw_arc(pos, 43.0, 0.0, TAU, 64, Color(1.0, 0.86, 0.32, 0.98), 4.0)
-	draw_arc(pos, 52.0, 0.0, TAU, 64, Color(accent.r, accent.g, accent.b, 0.42), 2.0)
+	_draw_prop_sprite_fit(&"call_token", Rect2(pos - Vector2(44.0, 44.0), Vector2(88.0, 88.0)), Color(1.0, 1.0, 1.0, 0.76))
 	var label_rect := _pocket_label_rect(called_pocket_id, pos)
 	draw_rect(label_rect, Color(0.012, 0.010, 0.018, 0.72))
 	draw_string(font, label_rect.position + Vector2(8.0, 17.0), _pocket_display_name(called_pocket_id), HORIZONTAL_ALIGNMENT_LEFT, label_rect.size.x - 16.0, 14, Color(1.0, 0.92, 0.48, 0.82))
@@ -9893,14 +11412,14 @@ func _draw_table_modifier_visuals(accent: Color) -> void:
 		var kind: StringName = zone.get("kind", &"")
 		match kind:
 			&"sticky":
-				_draw_table_sprite(&"tile_sticky", rect, Color(1.0, 0.78, 0.36, 0.22))
 				draw_rect(rect, Color(0.02, 0.0, 0.0, 0.22), true)
+				_draw_table_sprite_tiled(&"tile_sticky", rect, Color(1.0, 0.78, 0.36, 0.16), 92.0)
 				draw_rect(rect, Color(1.0, 0.62, 0.16, 0.42), false, 2.0)
 				for x in range(0, int(rect.size.x), 26):
 					draw_line(rect.position + Vector2(x, 0), rect.position + Vector2(x + 36, rect.size.y), Color(1.0, 0.62, 0.16, 0.10), 1.0)
 			&"ice":
-				_draw_table_sprite(&"tile_ice", rect, Color(0.68, 1.0, 1.0, 0.20))
 				draw_rect(rect, Color(0.26, 0.85, 1.0, 0.12), true)
+				_draw_table_sprite_tiled(&"tile_ice", rect, Color(0.68, 1.0, 1.0, 0.15), 84.0)
 				draw_rect(rect, Color(0.55, 0.95, 1.0, 0.42), false, 2.0)
 				for y in range(0, int(rect.size.y), 28):
 					draw_line(rect.position + Vector2(0, y), rect.position + Vector2(rect.size.x, y + 20), Color(0.7, 1.0, 1.0, 0.11), 1.0)
@@ -9908,11 +11427,25 @@ func _draw_table_modifier_visuals(accent: Color) -> void:
 	for data in bumper_defs:
 		var pos: Vector2 = data.get("pos", Vector2.ZERO)
 		var radius := float(data.get("radius", 24.0))
-		draw_circle(pos, radius + 8.0, Color(1.0, 0.18, 0.08, 0.18))
-		_draw_table_sprite(&"wax_seal", Rect2(pos - Vector2(radius + 10.0, radius + 10.0), Vector2((radius + 10.0) * 2.0, (radius + 10.0) * 2.0)), Color(1.0, 0.34, 0.18, 0.58))
-		draw_circle(pos, radius, Color(0.10, 0.015, 0.012, 0.82))
-		draw_arc(pos, radius + 2.0, 0.0, TAU, 48, Color(1.0, 0.38, 0.12, 0.95), 4.0)
-		draw_arc(pos, radius * 0.58, 0.0, TAU, 32, accent, 2.0)
+		draw_circle(pos, radius + 12.0, Color(1.0, 0.18, 0.08, 0.12))
+		_draw_prop_sprite_fit(&"bumper_idol", Rect2(pos - Vector2(radius + 16.0, radius + 16.0), Vector2((radius + 16.0) * 2.0, (radius + 16.0) * 2.0)), Color(1.0, 1.0, 1.0, 0.74))
+		draw_arc(pos, radius + 5.0, 0.0, TAU, 48, Color(accent.r, accent.g, accent.b, 0.45), 2.0)
+	var barrier_defs: Array = current_table.get("barriers", [])
+	for data in barrier_defs:
+		var rect: Rect2 = data.get("rect", Rect2())
+		draw_rect(rect.grow(4.0), Color(0.0, 0.0, 0.0, 0.42), true)
+		draw_rect(rect, Color(0.10, 0.012, 0.006, 0.92), true)
+		draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.62), false, 2.0)
+		_draw_table_sprite_tiled(&"tile_rail", rect, Color(1.0, 0.68, 0.24, 0.22), 42.0)
+	var gate_defs: Array = current_table.get("pocket_gates", [])
+	for data in gate_defs:
+		var pocket = _pocket_by_id(StringName(data.get("id", &"")))
+		if pocket == null:
+			continue
+		var axis: Vector2 = data.get("axis", _pocket_inward_axis(pocket))
+		var pos: Vector2 = pocket.global_position
+		draw_line(pos - axis.normalized() * 62.0, pos - axis.normalized() * 24.0, Color(1.0, 0.58, 0.16, 0.70), 4.0)
+		draw_arc(pos, 56.0, axis.angle() - 0.34, axis.angle() + 0.34, 16, Color(1.0, 0.48, 0.12, 0.58), 3.0)
 	var risk_pocket: StringName = _table_risk_pocket(current_table)
 	if risk_pocket != &"":
 		var pocket = _pocket_by_id(risk_pocket)
@@ -9920,13 +11453,8 @@ func _draw_table_modifier_visuals(accent: Color) -> void:
 			var pos: Vector2 = pocket.global_position
 			var pulse := 0.5 + 0.5 * sin(room_pulse * 3.0)
 			var risk_color := Color(1.0, 0.12, 0.34, 0.88)
-			draw_arc(pos, 50.0 + pulse * 4.0, 0.0, TAU, 64, risk_color, 4.0)
-			draw_arc(pos, 62.0, 0.0, TAU, 64, Color(0.95, 0.08, 1.0, 0.24 + pulse * 0.18), 2.0)
-			var font := ThemeDB.fallback_font
-			var tag_rect := Rect2(pos + Vector2(-38.0, 44.0), Vector2(76.0, 22.0))
-			draw_rect(tag_rect, Color(0.045, 0.0, 0.025, 0.86))
-			draw_rect(tag_rect, risk_color, false, 1.0)
-			draw_string(font, tag_rect.position + Vector2(13.0, 16.0), "RISK", HORIZONTAL_ALIGNMENT_LEFT, tag_rect.size.x - 18.0, 13, Color(1.0, 0.82, 0.92, 0.95))
+			draw_circle(pos, 64.0 + pulse * 7.0, Color(risk_color.r, risk_color.g, risk_color.b, 0.08 + pulse * 0.04))
+			_draw_prop_sprite_fit(&"risk_sigil", Rect2(pos - Vector2(49.0, 49.0), Vector2(98.0, 98.0)), Color(1.0, 1.0, 1.0, 0.82))
 
 func _draw_hovered_ball_ring(accent: Color) -> void:
 	if hovered_ball == null or not is_instance_valid(hovered_ball):
@@ -9973,28 +11501,35 @@ func _draw_power_and_aim(accent: Color) -> void:
 		aim_end = preview.get("cue_center", aim_end)
 	draw_line(cue_ball.global_position + dir * ball_edge, aim_end, Color(0.82, 1.0, 1.0, 0.88), 3.0)
 	if not preview.is_empty():
-		_draw_first_contact_preview(preview, accent)
+		_draw_first_contact_preview(preview, accent, _cue_rebound_preview_scale())
 		var blue_read := equipped_chalk_id == &"blue_chalk"
 		var entropy_read := _relic_preview_active(&"entropy_scanner")
+		var read_steps := _cue_contact_read_steps()
+		var read_color := cue_glow if read_steps > 0 else accent
 		if blue_read and entropy_read:
-			_draw_entropy_preview(preview, Color(0.34, 0.78, 1.0), 5)
+			read_steps = maxi(read_steps, 5)
+			read_color = Color(0.34, 0.78, 1.0)
 		elif blue_read:
-			_draw_entropy_preview(preview, Color(0.34, 0.78, 1.0), 2)
+			read_steps = maxi(read_steps, 2)
+			read_color = Color(0.34, 0.78, 1.0)
 		elif entropy_read:
-			_draw_entropy_preview(preview, accent, 3)
+			read_steps = maxi(read_steps, 3)
+		if read_steps > 0:
+			_draw_entropy_preview(preview, read_color, read_steps)
 	_draw_occult_cue(dir, cue_glow, cue_shaft, cue_wrap, cue_tip, cue_width, tip_inner_offset, tip_outer_offset, shaft_outer_offset)
 	_draw_field_power_meter(dir, accent, power_amount, tip_inner_offset)
 	if cue_spin.length() > 0.01:
 		_draw_spin_reticle(accent)
 
 func _draw_occult_cue(dir: Vector2, cue_glow: Color, cue_shaft: Color, cue_wrap: Color, cue_tip: Color, cue_width: float, tip_inner_offset: float, tip_outer_offset: float, shaft_outer_offset: float) -> void:
-	draw_set_transform(cue_ball.global_position, dir.angle(), Vector2.ONE)
+	draw_set_transform(cue_ball.global_position, dir.angle() + PI, Vector2.ONE)
 	var cue_length := shaft_outer_offset - tip_inner_offset
-	var sprite_width := cue_length * 1.203
-	var target := Rect2(Vector2(-tip_inner_offset - sprite_width * 0.8875, -19.0), Vector2(sprite_width, 38.0))
-	draw_line(Vector2(-shaft_outer_offset, cue_width * 0.64), Vector2(-tip_inner_offset, cue_width * 0.64), Color(0.0, 0.0, 0.0, 0.34), cue_width + 7.0)
-	draw_line(Vector2(-shaft_outer_offset, 0.0), Vector2(-tip_inner_offset, 0.0), Color(cue_glow.r, cue_glow.g, cue_glow.b, 0.18), cue_width + 10.0)
-	draw_texture_rect_region(BALL_CUE_SPRITE_ATLAS, target, CUE_SPRITE_REGION, Color(1.0, 1.0, 1.0, 0.98))
+	var sprite_width := cue_length * 1.52
+	var sprite_height := 27.0
+	var target := Rect2(Vector2(tip_inner_offset, -sprite_height * 0.5), Vector2(sprite_width, sprite_height))
+	draw_line(Vector2(tip_inner_offset + 10.0, cue_width * 0.50), Vector2(tip_inner_offset + sprite_width - 12.0, cue_width * 0.50), Color(0.0, 0.0, 0.0, 0.22), cue_width + 4.0)
+	draw_line(Vector2(tip_inner_offset + 3.0, 0.0), Vector2(tip_inner_offset + sprite_width - 14.0, 0.0), Color(cue_glow.r, cue_glow.g, cue_glow.b, 0.10), cue_width + 5.0)
+	_draw_table_sprite(&"cue_stick", target, Color(1.0, 1.0, 1.0, 0.99))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _relic_preview_active(id: StringName) -> bool:
@@ -10064,7 +11599,19 @@ func _preview_cue_after_ball_contact(incoming_dir: Vector2, target_dir: Vector2)
 		return cue_after.normalized()
 	return Vector2.ZERO
 
-func _draw_first_contact_preview(preview: Dictionary, accent: Color) -> void:
+func _cue_rebound_preview_scale() -> float:
+	var scale := float(_cue_def(selected_cue_id).get("rebound_scale", 1.0))
+	if scale > 1.0:
+		scale += run_cue_aim_bonus * 0.9
+	return scale
+
+func _cue_contact_read_steps() -> int:
+	var steps := int(_cue_def(selected_cue_id).get("contact_reads", 0))
+	if steps > 0:
+		steps += int(floor(run_cue_aim_bonus / 0.12))
+	return mini(5, steps)
+
+func _draw_first_contact_preview(preview: Dictionary, accent: Color, cue_rebound_scale: float = 1.0) -> void:
 	var ball = preview.get("ball")
 	if ball == null or not is_instance_valid(ball):
 		return
@@ -10089,9 +11636,14 @@ func _draw_first_contact_preview(preview: Dictionary, accent: Color) -> void:
 		draw_string(font, target_end + Vector2(6.0, -8.0), "graze", HORIZONTAL_ALIGNMENT_LEFT, 72.0, 13, Color(1.0, 0.86, 0.34, 0.62))
 	if cue_ricochet_dir.length() > 0.01:
 		var cue_rebound_start := cue_center + cue_ricochet_dir * (float(cue_ball.radius) + 6.0)
-		var cue_rebound_end := cue_rebound_start + cue_ricochet_dir * lerpf(128.0, 68.0, impact_strength)
-		draw_line(cue_rebound_start, cue_rebound_end, Color(0.82, 1.0, 1.0, lerpf(0.68, 0.42, impact_strength)), 2.0)
-		draw_circle(cue_rebound_end, 3.5, Color(0.82, 1.0, 1.0, 0.72))
+		var cue_rebound_end := cue_rebound_start + cue_ricochet_dir * lerpf(128.0, 68.0, impact_strength) * cue_rebound_scale
+		var rebound_alpha := clampf(lerpf(0.68, 0.42, impact_strength) + (cue_rebound_scale - 1.0) * 0.18, 0.0, 0.92)
+		var rebound_width := 2.0 + maxf(0.0, cue_rebound_scale - 1.0)
+		draw_line(cue_rebound_start, cue_rebound_end, Color(0.82, 1.0, 1.0, rebound_alpha), rebound_width)
+		draw_circle(cue_rebound_end, 3.5 + maxf(0.0, cue_rebound_scale - 1.0), Color(0.82, 1.0, 1.0, clampf(0.72 + (cue_rebound_scale - 1.0) * 0.12, 0.0, 0.95)))
+		if cue_rebound_scale > 1.05:
+			var font := ThemeDB.fallback_font
+			draw_string(font, cue_rebound_end + Vector2(6.0, -8.0), "cue path", HORIZONTAL_ALIGNMENT_LEFT, 84.0, 13, Color(0.82, 1.0, 1.0, 0.78))
 
 func _draw_entropy_preview(preview: Dictionary, accent: Color, max_steps: int = 3) -> void:
 	var source = preview.get("ball")

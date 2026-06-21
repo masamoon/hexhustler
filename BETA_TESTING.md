@@ -1,6 +1,6 @@
 # HexHustler Beta Testing Notes
 
-HexHustler is a single-player roguelite trick-shot pool prototype set in a cursed casino back room. The current beta target is a readable 5-table contract with unlockable cues, boards, relic drafts, chalk tools, hover help, and enough run feedback to report useful issues.
+HexHustler is a single-player roguelite trick-shot pool prototype set in a cursed casino back room. The current beta target is a generated 16-table rite: three 5-table occult biomes followed by Lucien's final table, with unlockable cues, boards, relic drafts, chalk tools, hover help, and enough run feedback to report useful issues.
 
 ## Launch
 
@@ -18,8 +18,8 @@ Headless sanity check:
 
 ## Main Menu Flow
 
-- `Start 5-Table Contract`: compact route. This is the main smoke test.
-- `Full Route`: 12-room clear with the boss route intact.
+- `Start Run`: generated biome route. This is the main smoke test.
+- `Full Route`: full generated rite with the Lucien final boss table intact.
 - `House Rules`: readable reference for scoring tags, special balls, rewards, and unlocks.
 
 Use `Esc` during play for controls, current build, audio/juice settings, reset, and debug export.
@@ -47,12 +47,12 @@ These are review-informed checks from nearby roguelike billiards games. Do not s
 - Rival pressure: AI rivals should telegraph what they want before the shot, reward answering the tell, and only punish repeated whiffs or scratches.
 - Minimal punishment traps: negative effects should create decisions, not silently ruin a run or make a correct shot feel bad.
 - Visual restraint by default: the default juice setting should be readable and avoid frequent flashing; high-juice effects stay opt-in.
-- Variety pressure: a 5-table run should expose different table goals, ball types, and reward choices without repeating the same build rhythm.
+- Variety pressure: a generated run should expose escalating biome rules, ball types, hazards, and reward choices without repeating the same build rhythm.
 - Stability and scaling: no crashes, no fixed-resolution assumptions, no clipped text, and no UI panel should hide the aim-critical table area.
 
 ## Recommended Beta Pass
 
-1. Start a 5-table contract with the default case.
+1. Start a generated run with the default case.
 2. Hover balls, active relics, chalk rows, reward offers, cue cards, and board cards.
 3. Verify low-power shots are controllable and max-power shots do not solve tables by endless bouncing.
 4. Try called pockets, bank/kick shots, caroms, multi-pots, a scratch, and at least one chalk.

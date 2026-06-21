@@ -10,6 +10,7 @@ const BALL_SPRITE_REGIONS: Dictionary = {
 	&"risk": Rect2(128, 64, 64, 64),
 	&"cursed": Rect2(128, 64, 64, 64),
 	&"bomb": Rect2(192, 64, 64, 64),
+	&"glass": Rect2(0, 0, 64, 64),
 	&"boss": Rect2(256, 64, 64, 64)
 }
 
@@ -22,6 +23,8 @@ var tint: Color = Color.WHITE
 var potted := false
 var table: Node = null
 var marked := false
+var glass_hits := 0
+var glass_break_limit := 3
 
 func setup(config: Dictionary, table_ref: Node) -> void:
 	ball_id = config.get("id", &"ball")
@@ -31,6 +34,8 @@ func setup(config: Dictionary, table_ref: Node) -> void:
 	radius = float(config.get("radius", 18.0))
 	tint = config.get("color", Color.WHITE)
 	marked = bool(config.get("marked", false))
+	glass_hits = int(config.get("glass_hits", 0))
+	glass_break_limit = int(config.get("glass_break_limit", 3))
 	table = table_ref
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	gravity_scale = 0.0
@@ -119,6 +124,16 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, radius + 10.0, 0.0, TAU, 48, Color(1.0, 0.38, 0.10, 0.72), 1.5)
 		draw_line(Vector2(-radius * 0.56, -radius * 0.56), Vector2(radius * 0.56, radius * 0.56), Color(1.0, 0.86, 0.24, 0.92), 2.0)
 		draw_line(Vector2(-radius * 0.56, radius * 0.56), Vector2(radius * 0.56, -radius * 0.56), Color(1.0, 0.86, 0.24, 0.92), 2.0)
+	if kind == &"glass":
+		var damage_t := clampf(float(glass_hits) / maxf(1.0, float(glass_break_limit)), 0.0, 1.0)
+		draw_circle(Vector2.ZERO, radius + 3.0, Color(0.64, 1.0, 1.0, 0.16 + damage_t * 0.16))
+		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 48, Color(0.72, 1.0, 1.0, 0.42), 1.5)
+		for i in range(glass_hits):
+			var angle := float(i) * 1.78 + float(abs(String(ball_id).hash()) % 19) * 0.13
+			var start := Vector2(cos(angle), sin(angle)) * radius * 0.16
+			var end := Vector2(cos(angle + 0.22), sin(angle + 0.22)) * radius * (0.62 + 0.10 * float(i))
+			draw_line(start, end, Color(0.88, 1.0, 1.0, 0.76), 1.6 + damage_t)
+			draw_line(end, end + Vector2(cos(angle - 0.86), sin(angle - 0.86)) * radius * 0.18, Color(0.88, 1.0, 1.0, 0.48), 1.0)
 
 func _sprite_region_for_ball() -> Rect2:
 	if kind == &"normal":

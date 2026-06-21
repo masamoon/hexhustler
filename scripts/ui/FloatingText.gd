@@ -8,10 +8,12 @@ var age := 0.0
 var velocity := Vector2(0, -42)
 var font_size := 26
 
-func setup(p_text: String, p_color: Color, p_size: int = 26) -> void:
+func setup(p_text: String, p_color: Color, p_size: int = 26, p_lifetime: float = 1.1, p_velocity: Vector2 = Vector2(0, -42)) -> void:
 	text = p_text
 	color = p_color
 	font_size = p_size
+	lifetime = p_lifetime
+	velocity = p_velocity
 
 func _process(delta: float) -> void:
 	age += delta
