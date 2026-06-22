@@ -1,0 +1,17 @@
+[remap]
+
+importer="font_data_bmfont"
+type="FontFile"
+uid="uid://ds47byba5j6w2"
+path="res://.godot/imported/hex_hustler_bone.fnt-40d16fb32d9a087153a6a212dba9fd52.fontdata"
+
+[deps]
+
+source_file="res://assets/fonts/hex_hustler_bone.fnt"
+dest_files=["res://.godot/imported/hex_hustler_bone.fnt-40d16fb32d9a087153a6a212dba9fd52.fontdata"]
+
+[params]
+
+fallbacks=[]
+compress=true
+scaling_mode=2

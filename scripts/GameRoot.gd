@@ -16,6 +16,7 @@ const BALL_CUE_SPRITE_ATLAS = preload("res://assets/ui/occult_ball_cue_sprites.p
 const MENU_BACKROOM_KEYART = preload("res://assets/ui/menu_backroom_keyart.png")
 const PROP_SPRITE_ATLAS = preload("res://assets/ui/occult_prop_sprites.png")
 const STORE_SPRITE_ATLAS = preload("res://assets/ui/occult_store_sprites.png")
+const HEX_FONT_PATH := "res://assets/fonts/hex_hustler_bone.fnt"
 
 enum State {
 	MAIN_MENU,
@@ -315,6 +316,7 @@ var last_ball_drama_pocket_pos := Vector2.ZERO
 var pocket_use: Dictionary = {}
 var rail_flash: Dictionary = {}
 var table_notes: Array[String] = []
+var hex_font: Font
 
 var world: Node2D
 var rails: Node2D
@@ -1086,6 +1088,7 @@ var tables: Array[Dictionary] = [
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_load_hex_font()
 	reward_rng.randomize()
 	fx_rng.randomize()
 	tables = _build_generated_run_tables()
@@ -5339,13 +5342,32 @@ func _build_reward_panel() -> void:
 func _new_label(text: String, size: int, color: Color) -> Label:
 	var label := Label.new()
 	label.text = text
+	label.add_theme_font_override("font", _hex_font())
 	label.add_theme_font_size_override("font_size", int(round(size * UI_SCALE)))
 	label.add_theme_color_override("font_color", color)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return label
 
 func _set_button_font_size(button: Button, size: int) -> void:
+	button.add_theme_font_override("font", _hex_font())
 	button.add_theme_font_size_override("font_size", int(round(size * BUTTON_FONT_SCALE)))
+
+func _hex_font() -> Font:
+	return hex_font if hex_font != null else ThemeDB.fallback_font
+
+func _load_hex_font() -> void:
+	var imported := ResourceLoader.load(HEX_FONT_PATH)
+	if imported is Font:
+		hex_font = imported
+		return
+	var font := FontFile.new()
+	var err := font.load_bitmap_font(HEX_FONT_PATH)
+	if err != OK:
+		push_warning("HexHustler font failed to load: " + HEX_FONT_PATH)
+		return
+	font.fixed_size = 48
+	font.modulate_color_glyphs = true
+	hex_font = font
 
 func _start_run(is_practice: bool = false, table_limit: int = 0) -> void:
 	run_active = true
@@ -6772,7 +6794,7 @@ func _update_score_trails(delta: float) -> void:
 func _draw_score_trails() -> void:
 	if score_side_feed.is_empty() and live_score_ticks.is_empty() and not _has_live_travel_trails():
 		return
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	_draw_live_travel_trails(font)
 	for tick in live_score_ticks:
 		var ttl := float(tick.get("ttl", 0.0))
@@ -10871,6 +10893,7 @@ func _sync_relic_panel() -> void:
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		row.focus_mode = Control.FOCUS_NONE
 		row.custom_minimum_size = Vector2(220, 28)
+		row.add_theme_font_override("font", _hex_font())
 		row.add_theme_font_size_override("font_size", int(round(9 * UI_SCALE)))
 		row.add_theme_color_override("font_color", Color(0.95, 0.92, 0.82))
 		row.add_theme_color_override("font_hover_color", Color(1.0, 0.86, 0.38))
@@ -11064,7 +11087,7 @@ func _draw_last_ball_drama(accent: Color) -> void:
 	if ball_pos != Vector2.ZERO and pocket_pos != Vector2.ZERO:
 		draw_line(ball_pos, pocket_pos, Color(accent.r, accent.g, accent.b, 0.16 * t), 2.0 + t * 3.0)
 		if t > 0.58:
-			var font := ThemeDB.fallback_font
+			var font := _hex_font()
 			var label_pos := ball_pos.lerp(pocket_pos, 0.52) + Vector2(0, -34.0 - pulse * 8.0)
 			draw_string(font, label_pos, "LAST BALL", HORIZONTAL_ALIGNMENT_CENTER, 150.0, int(16 + t * 10), Color(1.0, 0.92, 0.34, 0.80 * t))
 
@@ -11086,7 +11109,7 @@ func _draw_aim_test_overlay() -> void:
 		return
 	if browser_aim_test_visual_case.is_empty():
 		return
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	var target_pos: Vector2 = browser_aim_test_visual_case.get("target_pos", Vector2.ZERO)
 	var cue_center: Vector2 = browser_aim_test_visual_case.get("preview_cue_center", Vector2.ZERO)
 	var expected_target: Vector2 = browser_aim_test_visual_case.get("preview_target_dir", Vector2.ZERO)
@@ -11111,7 +11134,7 @@ func _draw_aim_test_overlay() -> void:
 func _draw_play_status_strip(accent: Color) -> void:
 	if current_table.is_empty():
 		return
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	var strip_height := 110.0 if lucien_dare_active else 86.0
 	var strip := Rect2(TABLE_RECT.position + Vector2(0.0, TABLE_RECT.size.y + RAIL_THICKNESS + 10.0), Vector2(TABLE_RECT.size.x, strip_height))
 	draw_rect(strip, Color(0.006, 0.004, 0.008, 0.84))
@@ -11123,16 +11146,16 @@ func _draw_play_status_strip(accent: Color) -> void:
 	_draw_soul_marker_icon(strip.position + Vector2(34.0, 64.0), 16.0, survival_color)
 	draw_string(font, strip.position + Vector2(58.0, 67.0), "Soul markers " + str(run_health), HORIZONTAL_ALIGNMENT_LEFT, 230.0, 31, survival_color)
 	_draw_ui_sprite_fit(&"cash_icon", Rect2(strip.position + Vector2(294.0, 46.0), Vector2(36.0, 27.0)), Color.WHITE)
-	draw_string(font, strip.position + Vector2(338.0, 65.0), _cash_status_text(), HORIZONTAL_ALIGNMENT_LEFT, 110.0, 27, Color(0.72, 1.0, 0.76, 0.96))
+	draw_string(font, strip.position + Vector2(338.0, 65.0), _cash_status_text(), HORIZONTAL_ALIGNMENT_LEFT, 170.0, 24, Color(0.72, 1.0, 0.76, 0.96))
 	var right_line_y := 91.0 if lucien_dare_active else 65.0
 	var right_line := "Score " + str(table_score) + "   Shot " + str(table_shots_used + 1) + "   " + _whiff_marker_clock_text() + "   " + _called_pocket_text()
-	draw_string(font, strip.position + Vector2(468.0, right_line_y), right_line, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 486.0, 22, Color(0.86, 0.96, 1.0, 0.92))
+	draw_string(font, strip.position + Vector2(540.0, right_line_y), right_line, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 558.0, 22, Color(0.86, 0.96, 1.0, 0.92))
 
 func _draw_soul_marker_icon(center: Vector2, size: float, color: Color) -> void:
 	_draw_ui_sprite_fit(&"soul_marker", Rect2(center - Vector2(size * 0.76, size * 0.88), Vector2(size * 1.52, size * 1.76)), Color(color.r, color.g, color.b, 0.96))
 
 func _draw_status_glyph(center: Vector2, radius: float, label: String, color: Color) -> void:
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	_draw_prop_sprite_fit(&"call_token", Rect2(center - Vector2(radius, radius) * 1.18, Vector2(radius * 2.36, radius * 2.36)), Color(color.r, color.g, color.b, 0.82))
 	draw_string(font, center + Vector2(-radius, radius * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, int(radius * 1.05), Color(color.r, color.g, color.b, 0.98))
 
@@ -11165,7 +11188,7 @@ func _dare_glyph_label(intent: StringName) -> String:
 func _draw_lucien_dare_panel(accent: Color) -> void:
 	if current_table.is_empty():
 		return
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	var active_color := Color(1.0, 0.78, 0.24, 0.96) if lucien_dare_active else Color(accent.r, accent.g, accent.b, 0.92)
 	var pulse := 0.5 + 0.5 * sin(room_pulse * 6.5)
 	var chip_height := 54.0 if lucien_dare_active else 30.0
@@ -11203,7 +11226,7 @@ func _draw_call_pocket_button(accent: Color) -> void:
 		return
 	if not _call_pocket_dare_active():
 		return
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	var rect := _call_pocket_button_rect()
 	var needs_call := _active_dare_needs_called_pocket() and called_pocket_id == &""
 	var pulse := 0.5 + 0.5 * sin(room_pulse * 7.5)
@@ -11220,7 +11243,7 @@ func _draw_call_pocket_button(accent: Color) -> void:
 func _draw_call_pocket_mode(accent: Color) -> void:
 	if not calling_pocket_mode or not _call_pocket_dare_active():
 		return
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	var pulse := 0.5 + 0.5 * sin(room_pulse * 6.8)
 	for pocket in pockets.get_children():
 		if not (pocket is PocketArea):
@@ -11308,7 +11331,7 @@ func _draw_lucien_presence(accent: Color) -> void:
 		draw_arc(pos + Vector2(0.0, 30.0), 60.0 + pulse * 8.0, 0.0, TAU, 64, Color(0.92, 0.10, 1.0, 0.34 + pulse * 0.18), 3.0)
 
 func _draw_room_signage(accent: Color) -> void:
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	var sign_rect := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5 - 216.0, -146.0), Vector2(432.0, 62.0))
 	var glow := 0.18 + 0.06 * sin(room_pulse * 2.2)
 	draw_rect(sign_rect.grow(12.0), Color(accent.r, accent.g, accent.b, glow))
@@ -11460,7 +11483,7 @@ func _draw_table_identity_badges(accent: Color) -> void:
 	var plaque := Rect2(TABLE_RECT.position + Vector2(14.0, -50.0), Vector2(430.0, 30.0))
 	draw_rect(plaque, Color(0.016, 0.012, 0.020, 0.86))
 	draw_rect(plaque, Color(accent.r, accent.g, accent.b, 0.58), false, 2.0)
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	var title := _contract_room_progress_text() + "  " + _table_tier_text(current_table) + "  " + String(current_table.get("name", "Table"))
 	draw_string(font, plaque.position + Vector2(12.0, 21.0), title, HORIZONTAL_ALIGNMENT_LEFT, plaque.size.x - 24.0, 16, Color(1.0, 0.90, 0.62, 0.95))
 	var tier := _table_tier(current_table)
@@ -11472,7 +11495,7 @@ func _draw_table_identity_badges(accent: Color) -> void:
 	_draw_table_route_strip(accent)
 
 func _draw_table_rule_stamps(accent: Color) -> void:
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	var stamps := [_objective_stamp_text(current_table), _modifier_stamp_text(current_table)]
 	var start := TABLE_RECT.position + Vector2(TABLE_RECT.size.x - 392.0, -50.0)
 	for i in range(stamps.size()):
@@ -11523,7 +11546,7 @@ func _draw_called_pocket_marker(accent: Color) -> void:
 	if pocket == null:
 		return
 	var pos: Vector2 = pocket.global_position
-	var font := ThemeDB.fallback_font
+	var font := _hex_font()
 	_draw_prop_sprite_fit(&"call_token", Rect2(pos - Vector2(44.0, 44.0), Vector2(88.0, 88.0)), Color(1.0, 1.0, 1.0, 0.76))
 	var label_rect := _pocket_label_rect(called_pocket_id, pos)
 	draw_rect(label_rect, Color(0.012, 0.010, 0.018, 0.72))
@@ -11804,7 +11827,7 @@ func _draw_first_contact_preview(preview: Dictionary, accent: Color, cue_rebound
 	draw_line(target_start, target_end, Color(accent.r, accent.g, accent.b, target_alpha), target_width)
 	draw_circle(target_end, lerpf(2.0, 4.5, transfer_strength), Color(accent.r, accent.g, accent.b, target_alpha + 0.06))
 	if impact_strength < 0.34:
-		var font := ThemeDB.fallback_font
+		var font := _hex_font()
 		draw_string(font, target_end + Vector2(6.0, -8.0), "graze", HORIZONTAL_ALIGNMENT_LEFT, 72.0, 13, Color(1.0, 0.86, 0.34, 0.62))
 	if cue_ricochet_dir.length() > 0.01:
 		var cue_rebound_start := cue_center + cue_ricochet_dir * (float(cue_ball.radius) + 6.0)
@@ -11814,7 +11837,7 @@ func _draw_first_contact_preview(preview: Dictionary, accent: Color, cue_rebound
 		draw_line(cue_rebound_start, cue_rebound_end, Color(0.82, 1.0, 1.0, rebound_alpha), rebound_width)
 		draw_circle(cue_rebound_end, 3.5 + maxf(0.0, cue_rebound_scale - 1.0), Color(0.82, 1.0, 1.0, clampf(0.72 + (cue_rebound_scale - 1.0) * 0.12, 0.0, 0.95)))
 		if cue_rebound_scale > 1.05:
-			var font := ThemeDB.fallback_font
+			var font := _hex_font()
 			draw_string(font, cue_rebound_end + Vector2(6.0, -8.0), "cue path", HORIZONTAL_ALIGNMENT_LEFT, 84.0, 13, Color(0.82, 1.0, 1.0, 0.78))
 
 func _draw_entropy_preview(preview: Dictionary, accent: Color, max_steps: int = 3) -> void:
