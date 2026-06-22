@@ -3,8 +3,14 @@ extends Area2D
 
 const PoolBall = preload("res://scripts/physics/PoolBall.gd")
 const TABLE_SPRITE_ATLAS = preload("res://assets/ui/occult_table_sprites.png")
+const HUD_FX_SPRITE_ATLAS = preload("res://assets/ui/occult_hud_fx_sprites.png")
+const FX_PRIMITIVE_ATLAS = preload("res://assets/ui/occult_fx_primitives.png")
 const CORNER_POCKET_SPRITE_REGION := Rect2(18, 22, 178, 168)
 const SIDE_POCKET_SPRITE_REGION := Rect2(430, 22, 178, 168)
+const FX_GLOW_RING_REGION := Rect2(0, 176, 128, 128)
+const FX_PULSE_RING_REGION := Rect2(128, 176, 128, 128)
+const FX_THIN_RING_REGION := Rect2(256, 0, 128, 128)
+const FX_BEAM_REGION := Rect2(0, 144, 192, 32)
 const CORNER_POCKET_CUP_CENTER := Vector2(96.3, 68.9)
 const SIDE_POCKET_CUP_CENTER := Vector2(108.3, 68.7)
 
@@ -55,22 +61,14 @@ func _on_body_entered(body: Node) -> void:
 		table.on_pocket_entered(body, self, false)
 
 func _draw() -> void:
-	var mouth := radius
-	var outer := visual_radius + 13.0
-	var pulse_alpha := 0.10 + pulse * 0.18
-	draw_circle(Vector2.ZERO, outer + pulse * 12.0, Color(tint.r, tint.g, tint.b, pulse_alpha))
-	var target_size := Vector2.ONE * (outer * 2.08)
-	var sprite_region := _sprite_region_for_pocket()
-	var sprite_scale := _sprite_scale_for_pocket()
-	var sprite_anchor_offset := _sprite_anchor_offset(sprite_region, target_size)
-	draw_set_transform(Vector2.ZERO, 0.0, sprite_scale)
-	draw_texture_rect_region(TABLE_SPRITE_ATLAS, Rect2(-target_size * 0.5 + sprite_anchor_offset, target_size), sprite_region)
+	if not debug_sensor:
+		return
+	var debug_size := Vector2.ONE * radius * 2.0
+	draw_texture_rect_region(FX_PRIMITIVE_ATLAS, Rect2(-debug_size * 0.5, debug_size), FX_THIN_RING_REGION, Color(0.52, 1.0, 0.95, 0.95))
+	draw_texture_rect_region(FX_PRIMITIVE_ATLAS, Rect2(Vector2(-radius, -2.0), Vector2(radius * 2.0, 4.0)), FX_BEAM_REGION, Color(0.52, 1.0, 0.95, 0.52))
+	draw_set_transform(Vector2.ZERO, PI * 0.5, Vector2.ONE)
+	draw_texture_rect_region(FX_PRIMITIVE_ATLAS, Rect2(Vector2(-radius, -2.0), Vector2(radius * 2.0, 4.0)), FX_BEAM_REGION, Color(0.52, 1.0, 0.95, 0.52))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	draw_arc(Vector2.ZERO, mouth, 0.0, TAU, 48, Color(tint.r, tint.g, tint.b, 0.42 + pulse * 0.28), 1.5)
-	if debug_sensor:
-		draw_arc(Vector2.ZERO, radius, 0.0, TAU, 64, Color(0.52, 1.0, 0.95, 0.95), 2.0)
-		draw_line(Vector2(-radius, 0.0), Vector2(radius, 0.0), Color(0.52, 1.0, 0.95, 0.52), 1.0)
-		draw_line(Vector2(0.0, -radius), Vector2(0.0, radius), Color(0.52, 1.0, 0.95, 0.52), 1.0)
 
 func _sprite_region_for_pocket() -> Rect2:
 	if pocket_id == &"N" or pocket_id == &"S":

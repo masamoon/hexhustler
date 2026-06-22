@@ -4,6 +4,7 @@ extends RigidBody2D
 signal contact_reported(ball, other: Node, speed: float)
 
 const BALL_CUE_SPRITE_ATLAS = preload("res://assets/ui/occult_ball_cue_sprites.png")
+const HUD_FX_SPRITE_ATLAS = preload("res://assets/ui/occult_hud_fx_sprites.png")
 const BALL_SPRITE_REGIONS: Dictionary = {
 	&"cue": Rect2(0, 64, 64, 64),
 	&"gold": Rect2(64, 64, 64, 64),
@@ -13,6 +14,8 @@ const BALL_SPRITE_REGIONS: Dictionary = {
 	&"glass": Rect2(0, 0, 64, 64),
 	&"boss": Rect2(256, 64, 64, 64)
 }
+const FX_MARKED_OVERLAY_REGION := Rect2(256, 176, 128, 128)
+const FX_GLASS_OVERLAY_REGION := Rect2(384, 176, 128, 128)
 
 var ball_id: StringName = &""
 var kind: StringName = &"normal"
@@ -123,20 +126,12 @@ func _draw() -> void:
 	var target := Rect2(-target_size * 0.5, target_size)
 	draw_texture_rect_region(BALL_CUE_SPRITE_ATLAS, target, region)
 	if marked:
-		draw_arc(Vector2.ZERO, radius + 6.5, 0.0, TAU, 48, Color(1.0, 0.86, 0.24, 0.98), 3.0)
-		draw_arc(Vector2.ZERO, radius + 10.0, 0.0, TAU, 48, Color(1.0, 0.38, 0.10, 0.72), 1.5)
-		draw_line(Vector2(-radius * 0.56, -radius * 0.56), Vector2(radius * 0.56, radius * 0.56), Color(1.0, 0.86, 0.24, 0.92), 2.0)
-		draw_line(Vector2(-radius * 0.56, radius * 0.56), Vector2(radius * 0.56, -radius * 0.56), Color(1.0, 0.86, 0.24, 0.92), 2.0)
+		var mark_size := Vector2.ONE * (radius * 3.55)
+		draw_texture_rect_region(HUD_FX_SPRITE_ATLAS, Rect2(-mark_size * 0.5, mark_size), FX_MARKED_OVERLAY_REGION, Color(1.0, 0.92, 0.48, 0.96))
 	if kind == &"glass":
 		var damage_t := clampf(float(glass_hits) / maxf(1.0, float(glass_break_limit)), 0.0, 1.0)
-		draw_circle(Vector2.ZERO, radius + 3.0, Color(0.64, 1.0, 1.0, 0.16 + damage_t * 0.16))
-		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 48, Color(0.72, 1.0, 1.0, 0.42), 1.5)
-		for i in range(glass_hits):
-			var angle := float(i) * 1.78 + float(abs(String(ball_id).hash()) % 19) * 0.13
-			var start := Vector2(cos(angle), sin(angle)) * radius * 0.16
-			var end := Vector2(cos(angle + 0.22), sin(angle + 0.22)) * radius * (0.62 + 0.10 * float(i))
-			draw_line(start, end, Color(0.88, 1.0, 1.0, 0.76), 1.6 + damage_t)
-			draw_line(end, end + Vector2(cos(angle - 0.86), sin(angle - 0.86)) * radius * 0.18, Color(0.88, 1.0, 1.0, 0.48), 1.0)
+		var glass_size := Vector2.ONE * (radius * 3.25)
+		draw_texture_rect_region(HUD_FX_SPRITE_ATLAS, Rect2(-glass_size * 0.5, glass_size), FX_GLASS_OVERLAY_REGION, Color(0.82, 1.0, 1.0, 0.42 + damage_t * 0.48))
 
 func _sprite_region_for_ball() -> Rect2:
 	if kind == &"normal":
@@ -152,10 +147,3 @@ func _normal_sprite_variant() -> int:
 		if tail.is_valid_int():
 			return ((tail.to_int() - 1) % 12) + 1
 	return (abs(text.hash()) % 12) + 1
-
-func _draw_glyph(glyph: String, color: Color, size_scale: float) -> void:
-	var font := ThemeDB.fallback_font
-	var font_size := maxi(12, int(round(radius * size_scale)))
-	var y := font_size * 0.36
-	draw_string(font, Vector2(-radius, y + 1.0), glyph, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, font_size, Color(0.0, 0.0, 0.0, 0.64))
-	draw_string(font, Vector2(-radius, y), glyph, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, font_size, color)

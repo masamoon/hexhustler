@@ -16,6 +16,8 @@ const BALL_CUE_SPRITE_ATLAS = preload("res://assets/ui/occult_ball_cue_sprites.p
 const MENU_BACKROOM_KEYART = preload("res://assets/ui/menu_backroom_keyart.png")
 const PROP_SPRITE_ATLAS = preload("res://assets/ui/occult_prop_sprites.png")
 const STORE_SPRITE_ATLAS = preload("res://assets/ui/occult_store_sprites.png")
+const HUD_FX_SPRITE_ATLAS = preload("res://assets/ui/occult_hud_fx_sprites.png")
+const FX_PRIMITIVE_ATLAS = preload("res://assets/ui/occult_fx_primitives.png")
 const HEX_FONT_PATH := "res://assets/fonts/hex_hustler_bone.fnt"
 
 enum State {
@@ -63,6 +65,8 @@ const POCKET_VISUAL_RADIUS := 42.0
 const POCKET_CAPTURE_RADIUS := 29.0
 const POCKET_CUP_DEPTH := 13.0
 const POCKET_MOUTH_DEPTH := 78.0
+const POCKET_CORNER_CUP_CENTER := Vector2(96.3, 68.9)
+const POCKET_SIDE_CUP_CENTER := Vector2(108.3, 68.7)
 const OUT_OF_BOUNDS_MARGIN := 30.0
 const TABLE_BACKSTOP_THICKNESS := 28.0
 const POCKET_THROAT_RADIUS := 58.0
@@ -170,6 +174,40 @@ const STORE_SPRITE_REGIONS: Dictionary = {
 	&"offer_card": Rect2(256, 0, 256, 256),
 	&"reroll_token": Rect2(512, 0, 256, 256),
 	&"sold_seal": Rect2(768, 0, 256, 256)
+}
+const HUD_FX_SPRITE_REGIONS: Dictionary = {
+	&"panel_frame": Rect2(0, 0, 96, 96),
+	&"panel_frame_hot": Rect2(96, 0, 96, 96),
+	&"button_frame": Rect2(192, 0, 96, 96),
+	&"button_frame_hot": Rect2(288, 0, 96, 96),
+	&"button_frame_dead": Rect2(384, 0, 96, 96),
+	&"long_strip": Rect2(0, 112, 256, 48),
+	&"label_chip": Rect2(272, 112, 128, 32),
+	&"tiny_chip": Rect2(400, 112, 96, 32),
+	&"glow_ring": Rect2(0, 176, 128, 128),
+	&"pulse_ring": Rect2(128, 176, 128, 128),
+	&"marked_overlay": Rect2(256, 176, 128, 128),
+	&"glass_overlay": Rect2(384, 176, 128, 128),
+	&"score_panel": Rect2(0, 320, 128, 80),
+	&"aim_panel": Rect2(128, 320, 160, 64),
+	&"power_bar": Rect2(288, 320, 160, 32)
+}
+const FX_PRIMITIVE_REGIONS: Dictionary = {
+	&"soft_disc": Rect2(0, 0, 128, 128),
+	&"soft_ring": Rect2(128, 0, 128, 128),
+	&"thin_ring": Rect2(256, 0, 128, 128),
+	&"hot_ring": Rect2(384, 0, 128, 128),
+	&"beam": Rect2(0, 144, 192, 32),
+	&"beam_soft": Rect2(0, 192, 192, 48),
+	&"dot": Rect2(208, 144, 64, 64),
+	&"spark": Rect2(288, 144, 64, 64),
+	&"rect_fill": Rect2(0, 256, 96, 96),
+	&"rect_dark": Rect2(96, 256, 96, 96),
+	&"frame": Rect2(192, 256, 96, 96),
+	&"zone_haze": Rect2(288, 256, 96, 96),
+	&"zone_stripes": Rect2(384, 256, 96, 96),
+	&"eye_glyph": Rect2(0, 384, 128, 64),
+	&"gate_arc": Rect2(128, 368, 128, 128)
 }
 const META_UPGRADES: Dictionary = {
 	"preview": {
@@ -2269,6 +2307,7 @@ func _build_pause_panel() -> void:
 	body_scroll.custom_minimum_size = Vector2(900, 380)
 	body_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	body_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_style_scroll_container(body_scroll, THEME_GOLD)
 	box.add_child(body_scroll)
 	pause_body = _new_label(_pause_help_text(), 13, Color(0.86, 0.94, 0.96))
 	pause_body.custom_minimum_size = Vector2(860, 0)
@@ -2365,6 +2404,7 @@ func _build_main_menu() -> void:
 	menu_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	menu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	menu_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_style_scroll_container(menu_scroll, THEME_GOLD)
 	left_margin.add_child(menu_scroll)
 
 	menu_root = VBoxContainer.new()
@@ -2570,6 +2610,7 @@ func _menu_column(title_text: String) -> VBoxContainer:
 	scroll.custom_minimum_size = Vector2(360, 294)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_style_scroll_container(scroll, THEME_MINT)
 	box.add_child(scroll)
 	var list := VBoxContainer.new()
 	list.name = "List"
@@ -2588,6 +2629,9 @@ func _menu_relic_column() -> VBoxContainer:
 	var scroll := ScrollContainer.new()
 	scroll.name = "Scroll"
 	scroll.custom_minimum_size = Vector2(360, 294)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_style_scroll_container(scroll, THEME_GOLD)
 	box.add_child(scroll)
 	var list := VBoxContainer.new()
 	list.name = "List"
@@ -2692,6 +2736,7 @@ func _build_menu_rules_panel() -> void:
 	rules_scroll.custom_minimum_size = Vector2(800, 420)
 	rules_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	rules_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_style_scroll_container(rules_scroll, THEME_GOLD)
 	box.add_child(rules_scroll)
 	menu_rules_body = _new_label(_menu_rules_text(), 15, Color(0.88, 0.96, 1.0))
 	menu_rules_body.custom_minimum_size = Vector2(770, 0)
@@ -5000,18 +5045,46 @@ func _unlock_relic(id: StringName) -> void:
 	run_unlock_messages.append(message)
 	_show_float(message, TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, 184), Color(1.0, 0.86, 0.36), 24)
 
-func _panel_style(fill: Color, border: Color, border_width: int = 1) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = fill
-	style.border_color = border
-	style.set_border_width_all(border_width)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_left = 0
-	style.corner_radius_bottom_right = 0
-	style.shadow_color = Color(0.0, 0.0, 0.0, 0.28)
-	style.shadow_size = 4
+func _panel_style(fill: Color, border: Color, border_width: int = 1) -> StyleBox:
+	var style := StyleBoxTexture.new()
+	style.texture = _hud_fx_atlas_texture(_panel_sprite_id(fill, border))
+	style.set_texture_margin_all(18.0)
+	style.set_expand_margin_all(2.0 + float(border_width))
+	style.modulate_color = _panel_sprite_modulate(fill, border)
 	return style
+
+func _panel_sprite_id(fill: Color, border: Color) -> StringName:
+	if border.a < 0.62 or (border.r + border.g + border.b) < 0.95:
+		return &"button_frame_dead"
+	if border.b > 0.70 and border.r > 0.60:
+		return &"panel_frame_hot"
+	if fill.r > 0.07 or fill.b > 0.07:
+		return &"button_frame"
+	return &"panel_frame"
+
+func _panel_sprite_modulate(fill: Color, border: Color) -> Color:
+	var accent := border.lerp(Color(1.0, 0.88, 0.44, border.a), 0.35)
+	var alpha := clampf(maxf(fill.a, border.a), 0.58, 1.0)
+	return Color(clampf(accent.r, 0.55, 1.0), clampf(accent.g, 0.55, 1.0), clampf(accent.b, 0.55, 1.0), alpha)
+
+func _style_scroll_container(scroll: ScrollContainer, accent: Color = THEME_GOLD) -> void:
+	if scroll == null:
+		return
+	scroll.add_theme_constant_override("scrollbar_margin_left", 4)
+	scroll.add_theme_constant_override("scrollbar_margin_right", 4)
+	scroll.add_theme_constant_override("scrollbar_margin_top", 4)
+	scroll.add_theme_constant_override("scrollbar_margin_bottom", 4)
+	_style_scroll_bar(scroll.get_v_scroll_bar(), accent)
+	_style_scroll_bar(scroll.get_h_scroll_bar(), accent)
+
+func _style_scroll_bar(scroll_bar: ScrollBar, accent: Color) -> void:
+	if scroll_bar == null:
+		return
+	scroll_bar.add_theme_stylebox_override("scroll", _panel_style(Color(0.012, 0.010, 0.016, 0.76), Color(accent.r, accent.g, accent.b, 0.32), 1))
+	scroll_bar.add_theme_stylebox_override("scroll_focus", _panel_style(Color(0.018, 0.014, 0.024, 0.86), Color(accent.r, accent.g, accent.b, 0.48), 1))
+	scroll_bar.add_theme_stylebox_override("grabber", _panel_style(Color(0.050, 0.035, 0.060, 0.92), Color(accent.r, accent.g, accent.b, 0.82), 1))
+	scroll_bar.add_theme_stylebox_override("grabber_highlight", _panel_style(Color(0.075, 0.050, 0.085, 0.96), Color(1.0, 0.84, 0.28, 0.96), 1))
+	scroll_bar.add_theme_stylebox_override("grabber_pressed", _panel_style(Color(0.035, 0.022, 0.045, 0.98), THEME_MINT, 1))
 
 func _ui_region(id: StringName) -> Rect2:
 	return UI_SPRITE_REGIONS.get(id, Rect2())
@@ -5048,6 +5121,64 @@ func _prop_sprite_region(id: StringName) -> Rect2:
 
 func _store_sprite_region(id: StringName) -> Rect2:
 	return STORE_SPRITE_REGIONS.get(id, Rect2())
+
+func _hud_fx_region(id: StringName) -> Rect2:
+	return HUD_FX_SPRITE_REGIONS.get(id, Rect2())
+
+func _fx_primitive_region(id: StringName) -> Rect2:
+	return FX_PRIMITIVE_REGIONS.get(id, Rect2())
+
+func _draw_hud_fx_sprite(id: StringName, target: Rect2, modulate: Color = Color.WHITE) -> void:
+	var region := _hud_fx_region(id)
+	if region.size.x <= 0.0 or region.size.y <= 0.0:
+		return
+	draw_texture_rect_region(HUD_FX_SPRITE_ATLAS, target, region, modulate)
+
+func _draw_fx_sprite(id: StringName, target: Rect2, modulate: Color = Color.WHITE) -> void:
+	var region := _fx_primitive_region(id)
+	if region.size.x <= 0.0 or region.size.y <= 0.0 or target.size.x <= 0.0 or target.size.y <= 0.0:
+		return
+	draw_texture_rect_region(FX_PRIMITIVE_ATLAS, target, region, modulate)
+
+func _draw_fx_rect(target: Rect2, modulate: Color, dark: bool = false) -> void:
+	_draw_fx_sprite(&"rect_dark" if dark else &"rect_fill", target, modulate)
+
+func _draw_fx_frame(target: Rect2, modulate: Color) -> void:
+	var width := clampf(minf(target.size.x, target.size.y) * 0.08, 2.0, 6.0)
+	_draw_fx_line(target.position, Vector2(target.end.x, target.position.y), modulate, width, &"beam")
+	_draw_fx_line(Vector2(target.position.x, target.end.y), target.end, modulate, width, &"beam")
+	_draw_fx_line(target.position, Vector2(target.position.x, target.end.y), modulate, width, &"beam")
+	_draw_fx_line(Vector2(target.end.x, target.position.y), target.end, modulate, width, &"beam")
+
+func _draw_fx_disc(center: Vector2, radius: float, modulate: Color, id: StringName = &"soft_disc") -> void:
+	var size := Vector2.ONE * maxf(1.0, radius * 2.0)
+	_draw_fx_sprite(id, Rect2(center - size * 0.5, size), modulate)
+
+func _draw_fx_ring(center: Vector2, radius: float, modulate: Color, id: StringName = &"soft_ring") -> void:
+	var size := Vector2.ONE * maxf(1.0, radius * 2.0)
+	_draw_fx_sprite(id, Rect2(center - size * 0.5, size), modulate)
+
+func _draw_fx_line(a: Vector2, b: Vector2, modulate: Color, width: float = 2.0, id: StringName = &"beam") -> void:
+	var delta := b - a
+	var length := delta.length()
+	if length <= 0.1:
+		return
+	var draw_width := maxf(2.0, width * (3.2 if id == &"beam_soft" else 2.2))
+	draw_set_transform(a, delta.angle(), Vector2.ONE)
+	_draw_fx_sprite(id, Rect2(Vector2(0.0, -draw_width * 0.5), Vector2(length, draw_width)), modulate)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+func _draw_fx_hline(a: Vector2, b: Vector2, modulate: Color, width: float = 2.0, id: StringName = &"beam") -> void:
+	var x0 := minf(a.x, b.x)
+	var x1 := maxf(a.x, b.x)
+	var y := (a.y + b.y) * 0.5
+	_draw_fx_sprite(id, Rect2(Vector2(x0, y - width * 0.5), Vector2(maxf(1.0, x1 - x0), maxf(2.0, width))), modulate)
+
+func _hud_fx_atlas_texture(id: StringName) -> AtlasTexture:
+	var texture := AtlasTexture.new()
+	texture.atlas = HUD_FX_SPRITE_ATLAS
+	texture.region = _hud_fx_region(id)
+	return texture
 
 func _draw_prop_sprite(id: StringName, target: Rect2, modulate: Color = Color.WHITE) -> void:
 	var region := _prop_sprite_region(id)
@@ -5221,6 +5352,7 @@ func _build_relic_panel() -> void:
 	scroll.custom_minimum_size = Vector2(306, 54)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_style_scroll_container(scroll, THEME_GOLD)
 	box.add_child(scroll)
 
 	relic_list = VBoxContainer.new()
@@ -5253,6 +5385,7 @@ func _build_chalk_panel() -> void:
 	scroll.custom_minimum_size = Vector2(306, 68)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_style_scroll_container(scroll, THEME_MINT)
 	box.add_child(scroll)
 	chalk_list = VBoxContainer.new()
 	chalk_list.add_theme_constant_override("separation", 4)
@@ -5307,6 +5440,7 @@ func _build_reward_panel() -> void:
 	reward_summary_scroll.custom_minimum_size = Vector2(820, 58)
 	reward_summary_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	reward_summary_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_style_scroll_container(reward_summary_scroll, THEME_GOLD)
 	box.add_child(reward_summary_scroll)
 	reward_summary_label = _new_label("", 12, Color(0.88, 0.96, 1.0))
 	reward_summary_label.custom_minimum_size = Vector2(800, 0)
@@ -6805,14 +6939,13 @@ func _draw_score_trails() -> void:
 		var color: Color = tick.get("color", Color(0.72, 1.0, 0.58))
 		var rise := (1.0 - t) * 30.0
 		var alpha := 0.86 * t
-		draw_circle(pos + Vector2(0, -rise * 0.35), 7.0 + (1.0 - t) * 8.0, Color(color.r, color.g, color.b, 0.10 * t))
+		_draw_fx_disc(pos + Vector2(0, -rise * 0.35), 7.0 + (1.0 - t) * 8.0, Color(color.r, color.g, color.b, 0.10 * t))
 		draw_string(font, pos + Vector2(-26.0, -rise), "+" + str(value), HORIZONTAL_ALIGNMENT_CENTER, 52.0, int(14 + (1.0 - t) * 7.0), Color(color.r, color.g, color.b, alpha))
 	if score_side_feed.is_empty():
 		return
 	var visible_count := mini(score_side_feed.size(), 5)
 	var panel := Rect2(TABLE_RECT.position + Vector2(-190.0, 154.0), Vector2(124.0, 34.0 + visible_count * 24.0))
-	draw_rect(panel, Color(0.008, 0.006, 0.012, 0.76))
-	draw_rect(panel, Color(1.0, 0.78, 0.24, 0.36), false, 2.0)
+	_draw_hud_fx_sprite(&"score_panel", panel, Color(1.0, 0.90, 0.58, 0.92))
 	draw_string(font, panel.position + Vector2(12.0, 22.0), "Shot Rep", HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 24.0, 13, Color(1.0, 0.88, 0.42, 0.88))
 	for i in range(visible_count):
 		var item: Dictionary = score_side_feed[score_side_feed.size() - 1 - i]
@@ -6821,7 +6954,7 @@ func _draw_score_trails() -> void:
 		var t := clampf(ttl / life, 0.0, 1.0)
 		var color: Color = item.get("color", Color(0.72, 1.0, 0.58))
 		var y := panel.position.y + 46.0 + i * 23.0
-		draw_circle(Vector2(panel.position.x + 14.0, y - 5.0), 4.5, Color(color.r, color.g, color.b, 0.24 + 0.36 * t))
+		_draw_fx_disc(Vector2(panel.position.x + 14.0, y - 5.0), 4.5, Color(color.r, color.g, color.b, 0.24 + 0.36 * t), &"spark")
 		draw_string(font, Vector2(panel.position.x + 24.0, y), String(item.get("text", "")), HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 30.0, 11, Color(color.r, color.g, color.b, 0.55 + 0.40 * t))
 
 func _has_live_travel_trails() -> bool:
@@ -6864,11 +6997,11 @@ func _draw_live_travel_trails(font: Font) -> void:
 			var progress := float(i + 1) / float(maxi(1, segments))
 			var alpha := (0.07 + progress * 0.34) * (0.58 + score_t * 0.70)
 			var width := lerpf(2.0, 5.0 + score_t * 6.0, progress) + pulse * score_t * 1.4
-			draw_line(a, b, Color(color.r, color.g, color.b, alpha * 0.42), width + 5.0)
-			draw_line(a, b, Color(color.r, color.g, color.b, alpha), width)
-		var label_pos: Vector2 = ball.global_position + Vector2(16.0, -float(ball.radius) - 20.0 - pulse * 6.0)
-		draw_circle(ball.global_position, float(ball.radius) + 10.0 + score_t * 14.0 + pulse * 5.0, Color(color.r, color.g, color.b, 0.05 + score_t * 0.10))
-		draw_string(font, label_pos, "+" + str(score_now), HORIZONTAL_ALIGNMENT_LEFT, 92.0, int(15 + score_t * 10.0), Color(color.r, color.g, color.b, 0.70 + score_t * 0.26))
+			_draw_fx_line(a, b, Color(color.r, color.g, color.b, alpha * 0.42), width + 5.0, &"beam_soft")
+			_draw_fx_line(a, b, Color(color.r, color.g, color.b, alpha), width, &"beam")
+			var label_pos: Vector2 = ball.global_position + Vector2(16.0, -float(ball.radius) - 20.0 - pulse * 6.0)
+			_draw_fx_disc(ball.global_position, float(ball.radius) + 10.0 + score_t * 14.0 + pulse * 5.0, Color(color.r, color.g, color.b, 0.05 + score_t * 0.10))
+			draw_string(font, label_pos, "+" + str(score_now), HORIZONTAL_ALIGNMENT_LEFT, 92.0, int(15 + score_t * 10.0), Color(color.r, color.g, color.b, 0.70 + score_t * 0.26))
 
 func _draw_fire_trails() -> void:
 	if fire_trail_points.is_empty():
@@ -6879,9 +7012,9 @@ func _draw_fire_trails() -> void:
 		var t := clampf(ttl / life, 0.0, 1.0)
 		var pos: Vector2 = point.get("pos", Vector2.ZERO)
 		var radius := float(point.get("radius", 8.0))
-		draw_circle(pos, radius * (1.0 + (1.0 - t) * 1.65), Color(1.0, 0.18, 0.03, 0.12 * t))
-		draw_circle(pos + Vector2(0.0, -radius * 0.24), radius * 0.68, Color(1.0, 0.48, 0.08, 0.22 * t))
-		draw_circle(pos + Vector2(0.0, -radius * 0.48), radius * 0.32, Color(1.0, 0.88, 0.22, 0.26 * t))
+		_draw_fx_disc(pos, radius * (1.0 + (1.0 - t) * 1.65), Color(1.0, 0.18, 0.03, 0.12 * t))
+		_draw_fx_disc(pos + Vector2(0.0, -radius * 0.24), radius * 0.68, Color(1.0, 0.48, 0.08, 0.22 * t), &"dot")
+		_draw_fx_disc(pos + Vector2(0.0, -radius * 0.48), radius * 0.32, Color(1.0, 0.88, 0.22, 0.26 * t), &"spark")
 
 func _handle_out_of_bounds_balls() -> void:
 	if not _should_contain_balls():
@@ -11013,10 +11146,11 @@ func _draw() -> void:
 	_draw_room_signage(accent)
 	_draw_table_identity_badges(accent)
 	_draw_table_rule_stamps(accent)
-	draw_rect(Rect2(TABLE_RECT.position - Vector2(RAIL_THICKNESS + 12.0, RAIL_THICKNESS + 12.0), TABLE_RECT.size + Vector2((RAIL_THICKNESS + 12.0) * 2.0, (RAIL_THICKNESS + 12.0) * 2.0)), outer_color)
-	draw_rect(Rect2(TABLE_RECT.position - Vector2(RAIL_THICKNESS, RAIL_THICKNESS), TABLE_RECT.size + Vector2(RAIL_THICKNESS * 2.0, RAIL_THICKNESS * 2.0)), rail_color)
+	_draw_fx_rect(Rect2(TABLE_RECT.position - Vector2(RAIL_THICKNESS + 12.0, RAIL_THICKNESS + 12.0), TABLE_RECT.size + Vector2((RAIL_THICKNESS + 12.0) * 2.0, (RAIL_THICKNESS + 12.0) * 2.0)), outer_color, true)
+	_draw_fx_rect(Rect2(TABLE_RECT.position - Vector2(RAIL_THICKNESS, RAIL_THICKNESS), TABLE_RECT.size + Vector2(RAIL_THICKNESS * 2.0, RAIL_THICKNESS * 2.0)), rail_color, true)
 	_draw_table_felt_surface(felt, accent)
 	_draw_pixel_table_trim(accent)
+	_draw_table_pockets()
 	_draw_relic_field_effects(accent)
 	_draw_table_modifier_visuals(accent)
 	_draw_call_pocket_mode(accent)
@@ -11024,8 +11158,8 @@ func _draw() -> void:
 	_draw_last_ball_drama(accent)
 	_draw_fire_trails()
 	_draw_score_trails()
-	draw_rect(Rect2(TABLE_RECT.position - Vector2(5, 5), TABLE_RECT.size + Vector2(10, 10)), Color(accent.r, accent.g, accent.b, 0.38), false, 4.0)
-	draw_rect(Rect2(TABLE_RECT.position - Vector2(RAIL_THICKNESS, RAIL_THICKNESS), TABLE_RECT.size + Vector2(RAIL_THICKNESS * 2.0, RAIL_THICKNESS * 2.0)), Color(accent.r, accent.g, accent.b, 0.62), false, 3.0)
+	_draw_fx_frame(Rect2(TABLE_RECT.position - Vector2(5, 5), TABLE_RECT.size + Vector2(10, 10)), Color(accent.r, accent.g, accent.b, 0.38))
+	_draw_fx_frame(Rect2(TABLE_RECT.position - Vector2(RAIL_THICKNESS, RAIL_THICKNESS), TABLE_RECT.size + Vector2(RAIL_THICKNESS * 2.0, RAIL_THICKNESS * 2.0)), Color(accent.r, accent.g, accent.b, 0.62))
 	_draw_rail_flashes(accent)
 	_draw_aim_test_overlay()
 	_draw_play_status_strip(accent)
@@ -11035,28 +11169,28 @@ func _draw() -> void:
 	_draw_power_and_aim(accent)
 
 func _draw_table_felt_surface(felt: Color, accent: Color) -> void:
-	draw_rect(TABLE_RECT, felt.darkened(0.20))
+	_draw_fx_rect(TABLE_RECT, felt.darkened(0.20), true)
 	_draw_table_sprite(&"tile_felt", TABLE_RECT, Color(felt.r * 3.0, felt.g * 3.0, felt.b * 3.0, 0.92))
-	draw_rect(TABLE_RECT, Color(felt.r, felt.g, felt.b, 0.18))
-	draw_rect(TABLE_RECT, Color(0.0, 0.0, 0.0, 0.05))
+	_draw_fx_rect(TABLE_RECT, Color(felt.r, felt.g, felt.b, 0.18))
+	_draw_fx_rect(TABLE_RECT, Color(0.0, 0.0, 0.0, 0.05), true)
 	for i in range(9):
 		var x := TABLE_RECT.position.x + i * TABLE_RECT.size.x / 8.0
-		draw_line(Vector2(x, TABLE_RECT.position.y), Vector2(x - 70, TABLE_RECT.end.y), Color(accent.r, accent.g, accent.b, 0.014), 1.0)
+		_draw_fx_line(Vector2(x, TABLE_RECT.position.y), Vector2(x - 70, TABLE_RECT.end.y), Color(accent.r, accent.g, accent.b, 0.014), 1.0, &"beam_soft")
 	for j in range(5):
 		var y := TABLE_RECT.position.y + j * TABLE_RECT.size.y / 4.0
-		draw_line(Vector2(TABLE_RECT.position.x, y), Vector2(TABLE_RECT.end.x, y + 54), Color(1, 1, 1, 0.008), 1.0)
+		_draw_fx_line(Vector2(TABLE_RECT.position.x, y), Vector2(TABLE_RECT.end.x, y + 54), Color(1, 1, 1, 0.008), 1.0, &"beam_soft")
 
 func _draw_pixel_table_trim(accent: Color) -> void:
 	var top_rail := Rect2(TABLE_RECT.position + Vector2(POCKET_CORNER_GAP, -RAIL_THICKNESS - 3.0), Vector2(TABLE_RECT.size.x - POCKET_CORNER_GAP * 2.0, 38.0))
 	var bottom_rail := Rect2(TABLE_RECT.position + Vector2(POCKET_CORNER_GAP, TABLE_RECT.size.y + 3.0), Vector2(TABLE_RECT.size.x - POCKET_CORNER_GAP * 2.0, 38.0))
-	draw_rect(top_rail, Color(0.010, 0.007, 0.012, 0.58))
-	draw_rect(bottom_rail, Color(0.010, 0.007, 0.012, 0.58))
+	_draw_fx_rect(top_rail, Color(0.010, 0.007, 0.012, 0.58), true)
+	_draw_fx_rect(bottom_rail, Color(0.010, 0.007, 0.012, 0.58), true)
 	_draw_table_sprite_tiled(&"rail_wide", top_rail, Color(1.0, 1.0, 1.0, 0.46))
 	_draw_table_sprite_tiled(&"rail_wide", bottom_rail, Color(1.0, 1.0, 1.0, 0.46))
 	var left_rail := Rect2(TABLE_RECT.position + Vector2(-RAIL_THICKNESS - 3.0, POCKET_CORNER_GAP), Vector2(38.0, TABLE_RECT.size.y - POCKET_CORNER_GAP * 2.0))
 	var right_rail := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 3.0, POCKET_CORNER_GAP), Vector2(38.0, TABLE_RECT.size.y - POCKET_CORNER_GAP * 2.0))
-	draw_rect(left_rail, Color(0.010, 0.007, 0.012, 0.66))
-	draw_rect(right_rail, Color(0.010, 0.007, 0.012, 0.66))
+	_draw_fx_rect(left_rail, Color(0.010, 0.007, 0.012, 0.66), true)
+	_draw_fx_rect(right_rail, Color(0.010, 0.007, 0.012, 0.66), true)
 	_draw_table_sprite_tiled(&"tile_rail", left_rail, Color(1.0, 0.86, 0.46, 0.14), 38.0)
 	_draw_table_sprite_tiled(&"tile_rail", right_rail, Color(1.0, 0.86, 0.46, 0.14), 38.0)
 	for i in range(5):
@@ -11066,8 +11200,61 @@ func _draw_pixel_table_trim(accent: Color) -> void:
 		var right_seal := seal_rect
 		right_seal.position.x = right_rail.position.x - 5.0
 		_draw_table_sprite_fit(&"separator_star", right_seal, Color(accent.r, accent.g, accent.b, 0.12))
-	draw_rect(TABLE_RECT.grow(3.0), Color(0.0, 0.0, 0.0, 0.28), false, 2.0)
-	draw_rect(TABLE_RECT.grow(9.0), Color(accent.r, accent.g, accent.b, 0.20), false, 2.0)
+	_draw_fx_frame(TABLE_RECT.grow(3.0), Color(0.0, 0.0, 0.0, 0.28))
+	_draw_fx_frame(TABLE_RECT.grow(9.0), Color(accent.r, accent.g, accent.b, 0.20))
+
+func _draw_table_pockets() -> void:
+	if pockets == null:
+		return
+	for child in pockets.get_children():
+		if not (child is PocketArea):
+			continue
+		var pocket: PocketArea = child
+		var outer := pocket.visual_radius + 13.0
+		var tint := pocket.tint
+		var pos := pocket.global_position
+		var target_size := Vector2.ONE * (outer * 2.08)
+		var sprite_region := _table_pocket_sprite_region(pocket.pocket_id)
+		var sprite_scale := _table_pocket_sprite_scale(pocket.pocket_id)
+		var sprite_anchor_offset := _table_pocket_sprite_anchor_offset(pocket.pocket_id, sprite_region, target_size)
+		draw_set_transform(pos, 0.0, sprite_scale)
+		draw_texture_rect_region(TABLE_SPRITE_ATLAS, Rect2(-target_size * 0.5 + sprite_anchor_offset, target_size), sprite_region)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if pocket.pulse <= 0.0:
+			continue
+		var mouth := pocket.radius
+		var pulse_alpha := pocket.pulse * 0.28
+		var glow_size := Vector2.ONE * ((outer + pocket.pulse * 12.0) * 2.35)
+		_draw_hud_fx_sprite(&"glow_ring", Rect2(pos - glow_size * 0.5, glow_size), Color(tint.r, tint.g, tint.b, pulse_alpha * 2.4))
+		var ring_size := Vector2.ONE * (mouth * 2.45)
+		_draw_hud_fx_sprite(&"pulse_ring", Rect2(pos - ring_size * 0.5, ring_size), Color(tint.r, tint.g, tint.b, pocket.pulse * 0.80))
+
+func _table_pocket_sprite_region(id: StringName) -> Rect2:
+	if id == &"N" or id == &"S":
+		return _table_sprite_region(&"pocket_side")
+	return _table_sprite_region(&"pocket_corner_a")
+
+func _table_pocket_sprite_anchor_offset(id: StringName, sprite_region: Rect2, target_size: Vector2) -> Vector2:
+	var cup_center := POCKET_SIDE_CUP_CENTER if id == &"N" or id == &"S" else POCKET_CORNER_CUP_CENTER
+	var region_center := sprite_region.size * 0.5
+	var cup_offset := Vector2(
+		(cup_center.x - region_center.x) / sprite_region.size.x * target_size.x,
+		(cup_center.y - region_center.y) / sprite_region.size.y * target_size.y
+	)
+	return -cup_offset
+
+func _table_pocket_sprite_scale(id: StringName) -> Vector2:
+	match id:
+		&"NE":
+			return Vector2(-1.0, 1.0)
+		&"SW":
+			return Vector2(1.0, -1.0)
+		&"SE":
+			return Vector2(-1.0, -1.0)
+		&"S":
+			return Vector2(1.0, -1.0)
+		_:
+			return Vector2.ONE
 
 func _draw_last_ball_drama(accent: Color) -> void:
 	if last_ball_drama_strength <= 0.02:
@@ -11079,13 +11266,13 @@ func _draw_last_ball_drama(accent: Color) -> void:
 	var ball_pos := last_ball_drama_ball_pos
 	var pocket_pos := last_ball_drama_pocket_pos
 	if ball_pos != Vector2.ZERO:
-		draw_circle(ball_pos, BALL_RADIUS + 18.0 + pulse * 8.0 + t * 16.0, Color(gold.r, gold.g, gold.b, 0.10 * t))
-		draw_arc(ball_pos, BALL_RADIUS + 12.0 + pulse * 6.0, -room_pulse * 4.0, TAU - room_pulse * 4.0, 54, Color(1.0, 0.88, 0.26, 0.72 * t), 3.0 + t * 2.0)
+		_draw_fx_disc(ball_pos, BALL_RADIUS + 18.0 + pulse * 8.0 + t * 16.0, Color(gold.r, gold.g, gold.b, 0.10 * t))
+		_draw_fx_ring(ball_pos, BALL_RADIUS + 12.0 + pulse * 6.0, Color(1.0, 0.88, 0.26, 0.72 * t), &"hot_ring")
 	if pocket_pos != Vector2.ZERO:
-		draw_circle(pocket_pos, 36.0 + t * 34.0 + pulse * 8.0, Color(cyan.r, cyan.g, cyan.b, 0.075 * t))
-		draw_arc(pocket_pos, 44.0 + pulse * 12.0 + t * 28.0, room_pulse * 3.4, TAU + room_pulse * 3.4, 64, Color(0.42, 1.0, 0.88, 0.52 * t), 3.0 + t * 2.0)
+		_draw_fx_disc(pocket_pos, 36.0 + t * 34.0 + pulse * 8.0, Color(cyan.r, cyan.g, cyan.b, 0.075 * t))
+		_draw_fx_ring(pocket_pos, 44.0 + pulse * 12.0 + t * 28.0, Color(0.42, 1.0, 0.88, 0.52 * t), &"soft_ring")
 	if ball_pos != Vector2.ZERO and pocket_pos != Vector2.ZERO:
-		draw_line(ball_pos, pocket_pos, Color(accent.r, accent.g, accent.b, 0.16 * t), 2.0 + t * 3.0)
+		_draw_fx_line(ball_pos, pocket_pos, Color(accent.r, accent.g, accent.b, 0.16 * t), 2.0 + t * 3.0, &"beam_soft")
 		if t > 0.58:
 			var font := _hex_font()
 			var label_pos := ball_pos.lerp(pocket_pos, 0.52) + Vector2(0, -34.0 - pulse * 8.0)
@@ -11101,8 +11288,8 @@ func _draw_rail_flashes(accent: Color) -> void:
 		var t := clampf(float(rail_flash[id]), 0.0, 1.0)
 		var fill := Color(accent.r, accent.g, accent.b, 0.14 + t * 0.38)
 		var edge := Color(1.0, 0.88, 0.34, 0.24 + t * 0.56)
-		draw_rect(rect.grow(4.0 + t * 5.0), fill)
-		draw_rect(rect.grow(5.0 + t * 5.0), edge, false, 3.0 + t * 2.0)
+		_draw_fx_rect(rect.grow(4.0 + t * 5.0), fill)
+		_draw_fx_frame(rect.grow(5.0 + t * 5.0), edge)
 
 func _draw_aim_test_overlay() -> void:
 	if not browser_aim_test_enabled and browser_aim_test_result_text == "":
@@ -11115,21 +11302,21 @@ func _draw_aim_test_overlay() -> void:
 	var expected_target: Vector2 = browser_aim_test_visual_case.get("preview_target_dir", Vector2.ZERO)
 	var expected_cue: Vector2 = browser_aim_test_visual_case.get("preview_cue_dir", Vector2.ZERO)
 	var label_pos := TABLE_RECT.position + Vector2(18.0, 24.0)
-	draw_rect(Rect2(label_pos - Vector2(10.0, 20.0), Vector2(600.0, 52.0)), Color(0.0, 0.0, 0.0, 0.64))
+	_draw_hud_fx_sprite(&"aim_panel", Rect2(label_pos - Vector2(10.0, 20.0), Vector2(600.0, 52.0)), Color(0.72, 1.0, 1.0, 0.80))
 	draw_string(font, label_pos, "AIM PREVIEW LIVE TEST", HORIZONTAL_ALIGNMENT_LEFT, 260.0, 18, Color(0.82, 1.0, 1.0, 0.96))
 	draw_string(font, label_pos + Vector2(0.0, 24.0), browser_aim_test_result_text, HORIZONTAL_ALIGNMENT_LEFT, 580.0, 17, Color(1.0, 0.90, 0.45, 0.96))
 	if expected_target.length_squared() > 0.01:
-		draw_line(target_pos, target_pos + expected_target.normalized() * 170.0, Color(0.28, 0.96, 1.0, 0.84), 5.0)
+		_draw_fx_line(target_pos, target_pos + expected_target.normalized() * 170.0, Color(0.28, 0.96, 1.0, 0.84), 5.0, &"beam")
 		draw_string(font, target_pos + expected_target.normalized() * 176.0 + Vector2(4.0, -4.0), "preview target", HORIZONTAL_ALIGNMENT_LEFT, 130.0, 14, Color(0.60, 1.0, 1.0, 0.88))
 	if expected_cue.length_squared() > 0.01:
-		draw_line(cue_center, cue_center + expected_cue.normalized() * 132.0, Color(1.0, 0.78, 0.28, 0.84), 4.0)
+		_draw_fx_line(cue_center, cue_center + expected_cue.normalized() * 132.0, Color(1.0, 0.78, 0.28, 0.84), 4.0, &"beam")
 		draw_string(font, cue_center + expected_cue.normalized() * 138.0 + Vector2(4.0, 14.0), "preview cue", HORIZONTAL_ALIGNMENT_LEFT, 110.0, 14, Color(1.0, 0.84, 0.42, 0.88))
 	if browser_aim_test_actual_target_dir.length_squared() > 0.01:
-		draw_line(target_pos, target_pos + browser_aim_test_actual_target_dir.normalized() * 170.0, Color(0.38, 1.0, 0.44, 0.90), 2.0)
-		draw_circle(target_pos + browser_aim_test_actual_target_dir.normalized() * 170.0, 5.0, Color(0.38, 1.0, 0.44, 0.95))
+		_draw_fx_line(target_pos, target_pos + browser_aim_test_actual_target_dir.normalized() * 170.0, Color(0.38, 1.0, 0.44, 0.90), 2.0, &"beam")
+		_draw_fx_disc(target_pos + browser_aim_test_actual_target_dir.normalized() * 170.0, 5.0, Color(0.38, 1.0, 0.44, 0.95), &"spark")
 	if browser_aim_test_actual_cue_dir.length_squared() > 0.01:
-		draw_line(cue_center, cue_center + browser_aim_test_actual_cue_dir.normalized() * 132.0, Color(1.0, 0.42, 0.16, 0.90), 2.0)
-		draw_circle(cue_center + browser_aim_test_actual_cue_dir.normalized() * 132.0, 5.0, Color(1.0, 0.42, 0.16, 0.95))
+		_draw_fx_line(cue_center, cue_center + browser_aim_test_actual_cue_dir.normalized() * 132.0, Color(1.0, 0.42, 0.16, 0.90), 2.0, &"beam")
+		_draw_fx_disc(cue_center + browser_aim_test_actual_cue_dir.normalized() * 132.0, 5.0, Color(1.0, 0.42, 0.16, 0.95), &"spark")
 
 func _draw_play_status_strip(accent: Color) -> void:
 	if current_table.is_empty():
@@ -11137,9 +11324,7 @@ func _draw_play_status_strip(accent: Color) -> void:
 	var font := _hex_font()
 	var strip_height := 110.0 if lucien_dare_active else 86.0
 	var strip := Rect2(TABLE_RECT.position + Vector2(0.0, TABLE_RECT.size.y + RAIL_THICKNESS + 10.0), Vector2(TABLE_RECT.size.x, strip_height))
-	draw_rect(strip, Color(0.006, 0.004, 0.008, 0.84))
-	_draw_ui_sprite_tiled(&"long_strip", strip, Color(1, 1, 1, 0.16))
-	draw_rect(strip, Color(accent.r, accent.g, accent.b, 0.50), false, 2.0)
+	_draw_hud_fx_sprite(&"long_strip", strip, Color(accent.r * 0.35 + 0.75, accent.g * 0.35 + 0.65, accent.b * 0.35 + 0.58, 0.92))
 	var top_line := _contract_room_progress_text() + "  " + String(current_table.get("name", "Table"))
 	var survival_color := Color(1.0, 0.34, 0.28, 0.96) if run_health <= 2 else THEME_GOLD
 	draw_string(font, strip.position + Vector2(18.0, 28.0), top_line, HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 36.0, 22, Color(1.0, 0.90, 0.62, 0.95))
@@ -11160,12 +11345,7 @@ func _draw_status_glyph(center: Vector2, radius: float, label: String, color: Co
 	draw_string(font, center + Vector2(-radius, radius * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, int(radius * 1.05), Color(color.r, color.g, color.b, 0.98))
 
 func _draw_eye_glyph(center: Vector2, width: float, color: Color) -> void:
-	var half := width * 0.5
-	var eye_color := Color(color.r, color.g, color.b, 0.90)
-	draw_arc(center, half, PI * 1.07, PI * 1.93, 28, eye_color, 2.0)
-	draw_arc(center, half, PI * 0.07, PI * 0.93, 28, eye_color, 2.0)
-	draw_circle(center, width * 0.18, Color(0.56, 1.0, 0.88, 0.76))
-	draw_circle(center, width * 0.07, Color(0.008, 0.006, 0.012, 0.98))
+	_draw_fx_sprite(&"eye_glyph", Rect2(center - Vector2(width * 0.62, width * 0.32), Vector2(width * 1.24, width * 0.64)), Color(color.r, color.g, color.b, 0.90))
 
 func _dare_glyph_label(intent: StringName) -> String:
 	match intent:
@@ -11194,8 +11374,7 @@ func _draw_lucien_dare_panel(accent: Color) -> void:
 	var chip_height := 54.0 if lucien_dare_active else 30.0
 	var strip_y := TABLE_RECT.position.y + TABLE_RECT.size.y + RAIL_THICKNESS + 10.0
 	var chip := Rect2(Vector2(TABLE_RECT.position.x + 426.0, strip_y + 6.0), Vector2(486.0, chip_height))
-	draw_rect(chip, Color(0.016, 0.010, 0.020, 0.88))
-	draw_rect(chip, Color(active_color.r, active_color.g, active_color.b, 0.56 + (0.18 * pulse if lucien_dare_active else 0.0)), false, 2.0)
+	_draw_hud_fx_sprite(&"label_chip", chip, Color(active_color.r, active_color.g, active_color.b, 0.86 + (0.12 * pulse if lucien_dare_active else 0.0)))
 	if lucien_dare_active:
 		_draw_status_glyph(chip.position + Vector2(29.0, 27.0), 17.0, _dare_glyph_label(rival_intent), active_color)
 		var heading := "Lucien's Dare: " + _rival_intent_detail(rival_intent)
@@ -11232,8 +11411,7 @@ func _draw_call_pocket_button(accent: Color) -> void:
 	var pulse := 0.5 + 0.5 * sin(room_pulse * 7.5)
 	var fill := Color(0.012, 0.010, 0.018, 0.86)
 	var edge := Color(1.0, 0.82, 0.28, 0.70 + pulse * 0.25) if calling_pocket_mode or needs_call else Color(accent.r, accent.g, accent.b, 0.58)
-	draw_rect(rect, fill)
-	draw_rect(rect, edge, false, 2.0 + (1.5 * pulse if needs_call else 0.0))
+	_draw_hud_fx_sprite(&"tiny_chip", rect, Color(edge.r, edge.g, edge.b, fill.a + 0.10))
 	var label := "C  Call Pocket" if not calling_pocket_mode else "Pick a glowing pocket"
 	if called_pocket_id != &"" and not calling_pocket_mode:
 		label = "C  " + _called_pocket_text()
@@ -11249,12 +11427,11 @@ func _draw_call_pocket_mode(accent: Color) -> void:
 		if not (pocket is PocketArea):
 			continue
 		var pos: Vector2 = pocket.global_position
-		draw_circle(pos, 55.0 + pulse * 7.0, Color(1.0, 0.82, 0.25, 0.11 + pulse * 0.05))
-		draw_arc(pos, 47.0 + pulse * 4.0, 0.0, TAU, 64, Color(1.0, 0.86, 0.32, 0.86), 3.0)
+		_draw_fx_disc(pos, 55.0 + pulse * 7.0, Color(1.0, 0.82, 0.25, 0.11 + pulse * 0.05))
+		_draw_fx_ring(pos, 47.0 + pulse * 4.0, Color(1.0, 0.86, 0.32, 0.86), &"hot_ring")
 		var label := _pocket_display_name(pocket.pocket_id)
 		var label_rect := _pocket_label_rect(pocket.pocket_id, pos)
-		draw_rect(label_rect, Color(0.012, 0.010, 0.018, 0.82))
-		draw_rect(label_rect, Color(1.0, 0.82, 0.28, 0.28), false, 1.0)
+		_draw_hud_fx_sprite(&"tiny_chip", label_rect, Color(1.0, 0.86, 0.32, 0.86))
 		draw_string(font, label_rect.position + Vector2(8.0, 17.0), label, HORIZONTAL_ALIGNMENT_LEFT, label_rect.size.x - 16.0, 14, Color(1.0, 0.92, 0.48, 0.96))
 
 func _pocket_label_rect(id: StringName, pos: Vector2) -> Rect2:
@@ -11314,9 +11491,9 @@ func _rail_rect_for_id(id: StringName) -> Rect2:
 
 func _draw_room_backdrop(accent: Color, outer_color: Color) -> void:
 	var visible_room := TABLE_RECT.grow(210.0)
-	draw_rect(visible_room, Color(0.010, 0.009, 0.013, 1.0))
-	draw_rect(Rect2(visible_room.position, Vector2(visible_room.size.x, 116.0)), Color(outer_color.r * 0.55, outer_color.g * 0.55, outer_color.b * 0.55, 0.88))
-	draw_rect(Rect2(visible_room.position + Vector2(0.0, visible_room.size.y - 136.0), Vector2(visible_room.size.x, 136.0)), Color(0.020, 0.018, 0.022, 1.0))
+	_draw_fx_rect(visible_room, Color(0.010, 0.009, 0.013, 1.0), true)
+	_draw_fx_rect(Rect2(visible_room.position, Vector2(visible_room.size.x, 116.0)), Color(outer_color.r * 0.55, outer_color.g * 0.55, outer_color.b * 0.55, 0.88), true)
+	_draw_fx_rect(Rect2(visible_room.position + Vector2(0.0, visible_room.size.y - 136.0), Vector2(visible_room.size.x, 136.0)), Color(0.020, 0.018, 0.022, 1.0), true)
 	_draw_lucien_presence(accent)
 
 func _draw_lucien_presence(accent: Color) -> void:
@@ -11325,25 +11502,22 @@ func _draw_lucien_presence(accent: Color) -> void:
 	var pos := TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 136.0, 28.0)
 	var pulse := 0.5 + 0.5 * sin(room_pulse * 2.1)
 	var glow := Color(accent.r, accent.g, accent.b, 0.050 + pulse * 0.024)
-	draw_circle(pos + Vector2(0.0, 48.0), 72.0 + pulse * 7.0, glow)
+	_draw_fx_disc(pos + Vector2(0.0, 48.0), 72.0 + pulse * 7.0, glow)
 	_draw_prop_sprite_fit(&"lucien_standing", Rect2(pos + Vector2(-78.0, -54.0), Vector2(156.0, 220.0)), Color(1.0, 1.0, 1.0, 0.76))
 	if StringName(current_table.get("objective", &"")) == &"boss":
-		draw_arc(pos + Vector2(0.0, 30.0), 60.0 + pulse * 8.0, 0.0, TAU, 64, Color(0.92, 0.10, 1.0, 0.34 + pulse * 0.18), 3.0)
+		_draw_fx_ring(pos + Vector2(0.0, 30.0), 60.0 + pulse * 8.0, Color(0.92, 0.10, 1.0, 0.34 + pulse * 0.18), &"hot_ring")
 
 func _draw_room_signage(accent: Color) -> void:
 	var font := _hex_font()
 	var sign_rect := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5 - 216.0, -146.0), Vector2(432.0, 62.0))
 	var glow := 0.18 + 0.06 * sin(room_pulse * 2.2)
-	draw_rect(sign_rect.grow(12.0), Color(accent.r, accent.g, accent.b, glow))
-	draw_rect(sign_rect.grow(8.0), Color(0.012, 0.008, 0.014, 0.88))
-	draw_rect(sign_rect, Color(0.006, 0.004, 0.010, 0.94))
-	draw_rect(sign_rect, Color(accent.r, accent.g, accent.b, 0.54), false, 2.0)
+	_draw_hud_fx_sprite(&"glow_ring", sign_rect.grow(22.0), Color(accent.r, accent.g, accent.b, glow * 1.8))
+	_draw_hud_fx_sprite(&"label_chip", sign_rect, Color(accent.r * 0.35 + 0.78, accent.g * 0.35 + 0.64, accent.b * 0.35 + 0.46, 0.96))
 	var left_ornament := Rect2(sign_rect.position + Vector2(12.0, -8.0), Vector2(62.0, 78.0))
 	var right_ornament := Rect2(sign_rect.end - Vector2(74.0, 70.0), Vector2(62.0, 78.0))
 	_draw_table_sprite_fit(&"separator_skull", left_ornament, Color(1.0, 0.82, 0.42, 0.20))
 	_draw_table_sprite_fit(&"separator_skull", right_ornament, Color(accent.r, accent.g, accent.b, 0.18))
-	draw_rect(sign_rect.grow(-7.0), Color(0.006, 0.004, 0.010, 0.70))
-	draw_line(sign_rect.position + Vector2(80.0, sign_rect.size.y * 0.5), sign_rect.end - Vector2(80.0, sign_rect.size.y * 0.5), Color(1.0, 0.78, 0.30, 0.24), 1.0)
+	_draw_fx_line(sign_rect.position + Vector2(80.0, sign_rect.size.y * 0.5), sign_rect.end - Vector2(80.0, sign_rect.size.y * 0.5), Color(1.0, 0.78, 0.30, 0.24), 1.0)
 	var title := _room_sign_title()
 	var title_font_size := 19 if title.length() > 17 else 22
 	draw_string(font, sign_rect.position + Vector2(66.0, 27.0), title, HORIZONTAL_ALIGNMENT_CENTER, sign_rect.size.x - 132.0, title_font_size, Color(1.0, 0.88, 0.40, 0.98))
@@ -11416,7 +11590,7 @@ func _draw_chip_stack(center: Vector2, accent: Color) -> void:
 		var offset := Vector2(0.0, -float(i) * 6.0)
 		var color := accent if i % 2 == 0 else Color(1.0, 0.82, 0.28)
 		_draw_table_sprite_fit(&"wax_seal", Rect2(center + offset - Vector2(19.0, 19.0), Vector2(38.0, 38.0)), Color(color.r, color.g, color.b, 0.70))
-		draw_arc(center + offset, 17.0, 0.0, TAU, 36, Color(color.r, color.g, color.b, 0.50), 1.5)
+		_draw_fx_ring(center + offset, 17.0, Color(color.r, color.g, color.b, 0.50), &"thin_ring")
 
 func _draw_floor_sigil(accent: Color) -> void:
 	var center := TABLE_RECT.position + Vector2(TABLE_RECT.size.x * 0.5, TABLE_RECT.size.y + RAIL_THICKNESS + 108.0)
@@ -11425,9 +11599,9 @@ func _draw_floor_sigil(accent: Color) -> void:
 func _draw_cashier_lamps(accent: Color) -> void:
 	for i in range(3):
 		var pos := TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 84.0, 120.0 + i * 92.0)
-		draw_circle(pos, 22.0, Color(1.0, 0.78, 0.16, 0.16 + 0.05 * sin(room_pulse * 2.0 + i)))
+		_draw_fx_disc(pos, 22.0, Color(1.0, 0.78, 0.16, 0.16 + 0.05 * sin(room_pulse * 2.0 + i)))
 		_draw_table_sprite_fit(&"lantern_tall", Rect2(pos + Vector2(-19.0, -34.0), Vector2(38.0, 70.0)), Color(1.0, 0.92, 0.60, 0.72))
-		draw_arc(pos, 18.0, PI, TAU, 24, Color(accent.r, accent.g, accent.b, 0.54), 2.0)
+		_draw_fx_ring(pos, 18.0, Color(accent.r, accent.g, accent.b, 0.54), &"thin_ring")
 
 func _draw_candles(accent: Color, chapel: bool) -> void:
 	var base_x := TABLE_RECT.position.x - 138.0
@@ -11436,14 +11610,14 @@ func _draw_candles(accent: Color, chapel: bool) -> void:
 		var pos := Vector2(base_x, base_y + i * 76.0)
 		if not chapel:
 			pos.x = TABLE_RECT.end.x + 122.0
-		draw_circle(pos, 12.0 + 2.0 * sin(room_pulse * 3.0 + i), Color(1.0, 0.56, 0.20, 0.22))
+		_draw_fx_disc(pos, 12.0 + 2.0 * sin(room_pulse * 3.0 + i), Color(1.0, 0.56, 0.20, 0.22))
 		_draw_table_sprite_fit(&"candle", Rect2(pos + Vector2(-18.0, -18.0), Vector2(36.0, 52.0)), Color(1.0, 0.96, 0.78, 0.82))
-		draw_circle(pos + Vector2(0.0, -5.0), 4.5, Color(accent.r, accent.g, accent.b, 0.70))
+		_draw_fx_disc(pos + Vector2(0.0, -5.0), 4.5, Color(accent.r, accent.g, accent.b, 0.70), &"spark")
 
 func _draw_rain_glass(accent: Color) -> void:
 	var pane := Rect2(TABLE_RECT.position + Vector2(TABLE_RECT.size.x + 28.0, -18.0), Vector2(128.0, 286.0))
 	_draw_prop_sprite_fit(&"rain_window", pane, Color(1.0, 1.0, 1.0, 0.54))
-	draw_rect(pane.grow(-18.0), Color(accent.r, accent.g, accent.b, 0.035), true)
+	_draw_fx_rect(pane.grow(-18.0), Color(accent.r, accent.g, accent.b, 0.035))
 
 func _draw_mirror_frames(accent: Color) -> void:
 	for i in range(2):
@@ -11481,8 +11655,7 @@ func _draw_house_wall_marks(accent: Color, outer_color: Color) -> void:
 
 func _draw_table_identity_badges(accent: Color) -> void:
 	var plaque := Rect2(TABLE_RECT.position + Vector2(14.0, -50.0), Vector2(430.0, 30.0))
-	draw_rect(plaque, Color(0.016, 0.012, 0.020, 0.86))
-	draw_rect(plaque, Color(accent.r, accent.g, accent.b, 0.58), false, 2.0)
+	_draw_hud_fx_sprite(&"label_chip", plaque, Color(accent.r * 0.3 + 0.78, accent.g * 0.3 + 0.64, accent.b * 0.3 + 0.46, 0.90))
 	var font := _hex_font()
 	var title := _contract_room_progress_text() + "  " + _table_tier_text(current_table) + "  " + String(current_table.get("name", "Table"))
 	draw_string(font, plaque.position + Vector2(12.0, 21.0), title, HORIZONTAL_ALIGNMENT_LEFT, plaque.size.x - 24.0, 16, Color(1.0, 0.90, 0.62, 0.95))
@@ -11490,8 +11663,8 @@ func _draw_table_identity_badges(accent: Color) -> void:
 	for i in range(3):
 		var pip_rect := Rect2(plaque.end - Vector2(76.0 - i * 22.0, 22.0), Vector2(14.0, 14.0))
 		var fill := Color(accent.r, accent.g, accent.b, 0.95) if i < tier else Color(0.14, 0.12, 0.15, 0.88)
-		draw_rect(pip_rect, fill)
-		draw_rect(pip_rect, Color(1.0, 0.82, 0.30, 0.45), false, 1.0)
+		_draw_fx_sprite(&"spark", pip_rect, fill)
+		_draw_fx_frame(pip_rect.grow(2.0), Color(1.0, 0.82, 0.30, 0.45))
 	_draw_table_route_strip(accent)
 
 func _draw_table_rule_stamps(accent: Color) -> void:
@@ -11500,8 +11673,7 @@ func _draw_table_rule_stamps(accent: Color) -> void:
 	var start := TABLE_RECT.position + Vector2(TABLE_RECT.size.x - 392.0, -50.0)
 	for i in range(stamps.size()):
 		var rect := Rect2(start + Vector2(i * 190.0, 0.0), Vector2(176.0, 30.0))
-		draw_rect(rect, Color(0.018, 0.012, 0.020, 0.86))
-		draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.58), false, 2.0)
+		_draw_hud_fx_sprite(&"label_chip", rect, Color(accent.r * 0.3 + 0.72, accent.g * 0.3 + 0.70, accent.b * 0.3 + 0.66, 0.90))
 		draw_string(font, rect.position + Vector2(10.0, 21.0), String(stamps[i]), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 20.0, 16, Color(0.92, 1.0, 0.96, 0.95))
 
 func _draw_table_route_strip(accent: Color) -> void:
@@ -11532,12 +11704,11 @@ func _draw_table_route_strip(accent: Color) -> void:
 		if not practice_run and i > final_index:
 			fill = Color(0.024, 0.022, 0.028, 0.68)
 			border = Color(0.20, 0.19, 0.23, 0.58)
-		draw_rect(rect, fill)
-		draw_rect(rect, border, false, 1.0)
+		_draw_hud_fx_sprite(&"tiny_chip", rect, fill)
+		_draw_hud_fx_sprite(&"tiny_chip", rect.grow(1.0), border)
 	if practice_run:
 		var practice_rect := Rect2(start + Vector2(0.0, 23.0), Vector2(132.0, 14.0))
-		draw_rect(practice_rect, Color(0.08, 0.12, 0.13, 0.90))
-		draw_rect(practice_rect, Color(0.62, 1.0, 0.90, 0.76), false, 1.0)
+		_draw_hud_fx_sprite(&"tiny_chip", practice_rect, Color(0.52, 1.0, 0.88, 0.82))
 
 func _draw_called_pocket_marker(accent: Color) -> void:
 	if called_pocket_id == &"":
@@ -11549,10 +11720,10 @@ func _draw_called_pocket_marker(accent: Color) -> void:
 	var font := _hex_font()
 	_draw_prop_sprite_fit(&"call_token", Rect2(pos - Vector2(44.0, 44.0), Vector2(88.0, 88.0)), Color(1.0, 1.0, 1.0, 0.76))
 	var label_rect := _pocket_label_rect(called_pocket_id, pos)
-	draw_rect(label_rect, Color(0.012, 0.010, 0.018, 0.72))
+	_draw_hud_fx_sprite(&"tiny_chip", label_rect, Color(1.0, 0.86, 0.32, 0.78))
 	draw_string(font, label_rect.position + Vector2(8.0, 17.0), _pocket_display_name(called_pocket_id), HORIZONTAL_ALIGNMENT_LEFT, label_rect.size.x - 16.0, 14, Color(1.0, 0.92, 0.48, 0.82))
 	if cue_ball != null and is_instance_valid(cue_ball) and not cue_ball.potted and (state == State.AIMING or state == State.CHARGING_SHOT):
-		draw_line(cue_ball.global_position, pos, Color(1.0, 0.86, 0.32, 0.16), 2.0)
+		_draw_fx_line(cue_ball.global_position, pos, Color(1.0, 0.86, 0.32, 0.16), 2.0, &"beam_soft")
 
 func _draw_relic_field_effects(accent: Color) -> void:
 	if relic_ids.is_empty():
@@ -11561,44 +11732,44 @@ func _draw_relic_field_effects(accent: Color) -> void:
 	var pulse := 0.5 + 0.5 * sin(room_pulse * 2.4)
 	if relic_ids.has(&"witching_well"):
 		var well_color := Color(0.50, 1.0, 0.86, 0.0)
-		draw_circle(center, 315.0, Color(well_color.r, well_color.g, well_color.b, 0.035 + pulse * 0.012))
-		draw_arc(center, 315.0, -room_pulse * 0.18, TAU - room_pulse * 0.18, 96, Color(well_color.r, well_color.g, well_color.b, 0.20 + pulse * 0.10), 2.0)
-		draw_arc(center, 210.0, room_pulse * 0.24, TAU + room_pulse * 0.24, 80, Color(accent.r, accent.g, accent.b, 0.10 + pulse * 0.05), 1.5)
+		_draw_fx_disc(center, 315.0, Color(well_color.r, well_color.g, well_color.b, 0.035 + pulse * 0.012))
+		_draw_fx_ring(center, 315.0, Color(well_color.r, well_color.g, well_color.b, 0.20 + pulse * 0.10), &"thin_ring")
+		_draw_fx_ring(center, 210.0, Color(accent.r, accent.g, accent.b, 0.10 + pulse * 0.05), &"soft_ring")
 		for i in range(8):
 			var angle := TAU * float(i) / 8.0 + room_pulse * 0.035
 			var inner := center + Vector2(cos(angle), sin(angle)) * 68.0
 			var outer := center + Vector2(cos(angle + 0.44), sin(angle + 0.44)) * 294.0
-			draw_line(inner, outer, Color(well_color.r, well_color.g, well_color.b, 0.050 + pulse * 0.025), 1.0)
+			_draw_fx_line(inner, outer, Color(well_color.r, well_color.g, well_color.b, 0.050 + pulse * 0.025), 1.0, &"beam_soft")
 	if relic_ids.has(&"salt_circle"):
 		var salt_color := Color(0.88, 1.0, 0.84, 0.0)
 		var radius := 188.0
-		draw_arc(center, radius, 0.0, TAU, 96, Color(salt_color.r, salt_color.g, salt_color.b, 0.28 + pulse * 0.12), 2.5)
-		draw_arc(center, radius + 13.0, -room_pulse * 0.08, TAU - room_pulse * 0.08, 96, Color(salt_color.r, salt_color.g, salt_color.b, 0.10), 1.0)
+		_draw_fx_ring(center, radius, Color(salt_color.r, salt_color.g, salt_color.b, 0.28 + pulse * 0.12), &"thin_ring")
+		_draw_fx_ring(center, radius + 13.0, Color(salt_color.r, salt_color.g, salt_color.b, 0.10), &"soft_ring")
 		for i in range(16):
 			var angle := TAU * float(i) / 16.0
 			var a := center + Vector2(cos(angle), sin(angle)) * (radius - 8.0)
 			var b := center + Vector2(cos(angle), sin(angle)) * (radius + 8.0)
-			draw_line(a, b, Color(salt_color.r, salt_color.g, salt_color.b, 0.20), 1.5)
+			_draw_fx_line(a, b, Color(salt_color.r, salt_color.g, salt_color.b, 0.20), 1.5)
 	if relic_ids.has(&"blood_moon"):
 		var moon_center := center + Vector2(116.0, -40.0)
 		var moon_color := Color(1.0, 0.12, 0.34, 0.0)
-		draw_circle(moon_center, 230.0, Color(moon_color.r, moon_color.g, moon_color.b, 0.040 + pulse * 0.018))
-		draw_arc(moon_center, 230.0, room_pulse * 0.16, TAU + room_pulse * 0.16, 96, Color(moon_color.r, moon_color.g, moon_color.b, 0.24 + pulse * 0.16), 2.5)
-		draw_arc(moon_center + Vector2(18.0, -6.0), 176.0, -0.80, PI + 0.92, 64, Color(1.0, 0.64, 0.38, 0.10 + pulse * 0.06), 5.0)
+		_draw_fx_disc(moon_center, 230.0, Color(moon_color.r, moon_color.g, moon_color.b, 0.040 + pulse * 0.018))
+		_draw_fx_ring(moon_center, 230.0, Color(moon_color.r, moon_color.g, moon_color.b, 0.24 + pulse * 0.16), &"hot_ring")
+		_draw_fx_ring(moon_center + Vector2(18.0, -6.0), 176.0, Color(1.0, 0.64, 0.38, 0.10 + pulse * 0.06), &"soft_ring")
 		for i in range(5):
 			var angle := -0.35 + float(i) * 0.18 + pulse * 0.04
-			draw_line(moon_center + Vector2(cos(angle), sin(angle)) * 58.0, moon_center + Vector2(cos(angle), sin(angle)) * 206.0, Color(moon_color.r, moon_color.g, moon_color.b, 0.055), 1.0)
+			_draw_fx_line(moon_center + Vector2(cos(angle), sin(angle)) * 58.0, moon_center + Vector2(cos(angle), sin(angle)) * 206.0, Color(moon_color.r, moon_color.g, moon_color.b, 0.055), 1.0, &"beam_soft")
 	if relic_ids.has(&"grave_lantern") and called_pocket_id != &"":
 		var pocket = _pocket_by_id(called_pocket_id)
 		if pocket != null:
 			var pos: Vector2 = pocket.global_position
 			var lantern := Color(0.62, 1.0, 0.76, 0.0)
-			draw_circle(pos, 76.0 + pulse * 9.0, Color(lantern.r, lantern.g, lantern.b, 0.055 + pulse * 0.018))
-			draw_arc(pos, 67.0, -room_pulse * 0.28, TAU - room_pulse * 0.28, 72, Color(lantern.r, lantern.g, lantern.b, 0.42), 3.0)
-			draw_arc(pos, 43.0, room_pulse * 0.34, TAU + room_pulse * 0.34, 54, Color(1.0, 0.86, 0.34, 0.34), 2.0)
+			_draw_fx_disc(pos, 76.0 + pulse * 9.0, Color(lantern.r, lantern.g, lantern.b, 0.055 + pulse * 0.018))
+			_draw_fx_ring(pos, 67.0, Color(lantern.r, lantern.g, lantern.b, 0.42), &"soft_ring")
+			_draw_fx_ring(pos, 43.0, Color(1.0, 0.86, 0.34, 0.34), &"thin_ring")
 			if cue_ball != null and is_instance_valid(cue_ball) and not cue_ball.potted and (state == State.AIMING or state == State.CHARGING_SHOT):
-				draw_line(cue_ball.global_position, pos, Color(lantern.r, lantern.g, lantern.b, 0.10), 4.0)
-				draw_line(cue_ball.global_position, pos, Color(1.0, 0.86, 0.34, 0.18), 1.5)
+				_draw_fx_line(cue_ball.global_position, pos, Color(lantern.r, lantern.g, lantern.b, 0.10), 4.0, &"beam_soft")
+				_draw_fx_line(cue_ball.global_position, pos, Color(1.0, 0.86, 0.34, 0.18), 1.5)
 
 func _draw_table_modifier_visuals(accent: Color) -> void:
 	var zone_defs: Array = current_table.get("zones", [])
@@ -11607,30 +11778,30 @@ func _draw_table_modifier_visuals(accent: Color) -> void:
 		var kind: StringName = zone.get("kind", &"")
 		match kind:
 			&"sticky":
-				draw_rect(rect, Color(0.02, 0.0, 0.0, 0.22), true)
+				_draw_fx_rect(rect, Color(0.02, 0.0, 0.0, 0.22), true)
 				_draw_table_sprite_tiled(&"tile_sticky", rect, Color(1.0, 0.78, 0.36, 0.16), 92.0)
-				draw_rect(rect, Color(1.0, 0.62, 0.16, 0.42), false, 2.0)
+				_draw_fx_frame(rect, Color(1.0, 0.62, 0.16, 0.42))
 				for x in range(0, int(rect.size.x), 26):
-					draw_line(rect.position + Vector2(x, 0), rect.position + Vector2(x + 36, rect.size.y), Color(1.0, 0.62, 0.16, 0.10), 1.0)
+					_draw_fx_line(rect.position + Vector2(x, 0), rect.position + Vector2(x + 36, rect.size.y), Color(1.0, 0.62, 0.16, 0.10), 1.0, &"beam_soft")
 			&"ice":
-				draw_rect(rect, Color(0.26, 0.85, 1.0, 0.12), true)
+				_draw_fx_rect(rect, Color(0.26, 0.85, 1.0, 0.12))
 				_draw_table_sprite_tiled(&"tile_ice", rect, Color(0.68, 1.0, 1.0, 0.15), 84.0)
-				draw_rect(rect, Color(0.55, 0.95, 1.0, 0.42), false, 2.0)
+				_draw_fx_frame(rect, Color(0.55, 0.95, 1.0, 0.42))
 				for y in range(0, int(rect.size.y), 28):
-					draw_line(rect.position + Vector2(0, y), rect.position + Vector2(rect.size.x, y + 20), Color(0.7, 1.0, 1.0, 0.11), 1.0)
+					_draw_fx_line(rect.position + Vector2(0, y), rect.position + Vector2(rect.size.x, y + 20), Color(0.7, 1.0, 1.0, 0.11), 1.0, &"beam_soft")
 	var bumper_defs: Array = current_table.get("bumpers", [])
 	for data in bumper_defs:
 		var pos: Vector2 = data.get("pos", Vector2.ZERO)
 		var radius := float(data.get("radius", 24.0))
-		draw_circle(pos, radius + 12.0, Color(1.0, 0.18, 0.08, 0.12))
+		_draw_fx_disc(pos, radius + 12.0, Color(1.0, 0.18, 0.08, 0.12))
 		_draw_prop_sprite_fit(&"bumper_idol", Rect2(pos - Vector2(radius + 16.0, radius + 16.0), Vector2((radius + 16.0) * 2.0, (radius + 16.0) * 2.0)), Color(1.0, 1.0, 1.0, 0.74))
-		draw_arc(pos, radius + 5.0, 0.0, TAU, 48, Color(accent.r, accent.g, accent.b, 0.45), 2.0)
+		_draw_fx_ring(pos, radius + 5.0, Color(accent.r, accent.g, accent.b, 0.45), &"thin_ring")
 	var barrier_defs: Array = current_table.get("barriers", [])
 	for data in barrier_defs:
 		var rect: Rect2 = data.get("rect", Rect2())
-		draw_rect(rect.grow(4.0), Color(0.0, 0.0, 0.0, 0.42), true)
-		draw_rect(rect, Color(0.10, 0.012, 0.006, 0.92), true)
-		draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.62), false, 2.0)
+		_draw_fx_rect(rect.grow(4.0), Color(0.0, 0.0, 0.0, 0.42), true)
+		_draw_fx_rect(rect, Color(0.10, 0.012, 0.006, 0.92), true)
+		_draw_fx_frame(rect, Color(accent.r, accent.g, accent.b, 0.62))
 		_draw_table_sprite_tiled(&"tile_rail", rect, Color(1.0, 0.68, 0.24, 0.22), 42.0)
 	var gate_defs: Array = current_table.get("pocket_gates", [])
 	for data in gate_defs:
@@ -11639,8 +11810,8 @@ func _draw_table_modifier_visuals(accent: Color) -> void:
 			continue
 		var axis: Vector2 = data.get("axis", _pocket_inward_axis(pocket))
 		var pos: Vector2 = pocket.global_position
-		draw_line(pos - axis.normalized() * 62.0, pos - axis.normalized() * 24.0, Color(1.0, 0.58, 0.16, 0.70), 4.0)
-		draw_arc(pos, 56.0, axis.angle() - 0.34, axis.angle() + 0.34, 16, Color(1.0, 0.48, 0.12, 0.58), 3.0)
+		_draw_fx_line(pos - axis.normalized() * 62.0, pos - axis.normalized() * 24.0, Color(1.0, 0.58, 0.16, 0.70), 4.0)
+		_draw_fx_ring(pos, 56.0, Color(1.0, 0.48, 0.12, 0.58), &"gate_arc")
 	var risk_pocket: StringName = _table_risk_pocket(current_table)
 	if risk_pocket != &"":
 		var pocket = _pocket_by_id(risk_pocket)
@@ -11648,22 +11819,22 @@ func _draw_table_modifier_visuals(accent: Color) -> void:
 			var pos: Vector2 = pocket.global_position
 			var pulse := 0.5 + 0.5 * sin(room_pulse * 3.0)
 			var risk_color := Color(1.0, 0.12, 0.34, 0.88)
-			draw_circle(pos, 64.0 + pulse * 7.0, Color(risk_color.r, risk_color.g, risk_color.b, 0.08 + pulse * 0.04))
+			_draw_fx_disc(pos, 64.0 + pulse * 7.0, Color(risk_color.r, risk_color.g, risk_color.b, 0.08 + pulse * 0.04))
 			_draw_prop_sprite_fit(&"risk_sigil", Rect2(pos - Vector2(49.0, 49.0), Vector2(98.0, 98.0)), Color(1.0, 1.0, 1.0, 0.82))
 
 func _draw_hovered_ball_ring(accent: Color) -> void:
 	if hovered_ball == null or not is_instance_valid(hovered_ball):
 		return
 	var ring_radius: float = float(hovered_ball.radius) + 7.0
-	draw_arc(hovered_ball.global_position, ring_radius, 0.0, TAU, 48, Color(accent.r, accent.g, accent.b, 0.95), 3.0)
-	draw_arc(hovered_ball.global_position, ring_radius + 5.0, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.32), 1.5)
+	_draw_fx_ring(hovered_ball.global_position, ring_radius, Color(accent.r, accent.g, accent.b, 0.95), &"thin_ring")
+	_draw_fx_ring(hovered_ball.global_position, ring_radius + 5.0, Color(1.0, 1.0, 1.0, 0.32), &"soft_ring")
 
 func _draw_chain_heat_cue_glow() -> void:
 	var pulse := 0.5 + 0.5 * sin(room_pulse * 6.0)
 	var base_radius: float = float(cue_ball.radius)
-	draw_circle(cue_ball.global_position, base_radius + 16.0 + pulse * 5.0, Color(1.0, 0.34, 0.06, 0.10))
-	draw_arc(cue_ball.global_position, base_radius + 10.0 + pulse * 3.0, 0.0, TAU, 48, Color(1.0, 0.58, 0.12, 0.86), 3.0)
-	draw_arc(cue_ball.global_position, base_radius + 17.0 + pulse * 4.0, -room_pulse * 3.2, TAU - room_pulse * 3.2, 56, Color(1.0, 0.88, 0.24, 0.52), 2.0)
+	_draw_fx_disc(cue_ball.global_position, base_radius + 16.0 + pulse * 5.0, Color(1.0, 0.34, 0.06, 0.10))
+	_draw_fx_ring(cue_ball.global_position, base_radius + 10.0 + pulse * 3.0, Color(1.0, 0.58, 0.12, 0.86), &"hot_ring")
+	_draw_fx_ring(cue_ball.global_position, base_radius + 17.0 + pulse * 4.0, Color(1.0, 0.88, 0.24, 0.52), &"soft_ring")
 
 func _draw_power_and_aim(accent: Color) -> void:
 	if cue_ball == null or not is_instance_valid(cue_ball) or cue_ball.potted:
@@ -11694,7 +11865,7 @@ func _draw_power_and_aim(accent: Color) -> void:
 	var aim_end: Vector2 = cue_ball.global_position + dir * aim_len
 	if not preview.is_empty():
 		aim_end = preview.get("cue_center", aim_end)
-	draw_line(cue_ball.global_position + dir * ball_edge, aim_end, Color(0.82, 1.0, 1.0, 0.88), 3.0)
+	_draw_fx_line(cue_ball.global_position + dir * ball_edge, aim_end, Color(0.82, 1.0, 1.0, 0.88), 3.0)
 	if not preview.is_empty():
 		_draw_first_contact_preview(preview, accent, _cue_rebound_preview_scale())
 		var blue_read := equipped_chalk_id == &"blue_chalk"
@@ -11722,8 +11893,8 @@ func _draw_occult_cue(dir: Vector2, cue_glow: Color, cue_shaft: Color, cue_wrap:
 	var sprite_width := cue_length * 1.52
 	var sprite_height := 27.0
 	var target := Rect2(Vector2(tip_inner_offset, -sprite_height * 0.5), Vector2(sprite_width, sprite_height))
-	draw_line(Vector2(tip_inner_offset + 10.0, cue_width * 0.50), Vector2(tip_inner_offset + sprite_width - 12.0, cue_width * 0.50), Color(0.0, 0.0, 0.0, 0.22), cue_width + 4.0)
-	draw_line(Vector2(tip_inner_offset + 3.0, 0.0), Vector2(tip_inner_offset + sprite_width - 14.0, 0.0), Color(cue_glow.r, cue_glow.g, cue_glow.b, 0.10), cue_width + 5.0)
+	_draw_fx_hline(Vector2(tip_inner_offset + 10.0, cue_width * 0.50), Vector2(tip_inner_offset + sprite_width - 12.0, cue_width * 0.50), Color(0.0, 0.0, 0.0, 0.22), cue_width + 4.0, &"beam_soft")
+	_draw_fx_hline(Vector2(tip_inner_offset + 3.0, 0.0), Vector2(tip_inner_offset + sprite_width - 14.0, 0.0), Color(cue_glow.r, cue_glow.g, cue_glow.b, 0.10), cue_width + 5.0, &"beam_soft")
 	_draw_table_sprite(&"cue_stick", target, Color(1.0, 1.0, 1.0, 0.99))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
@@ -11821,11 +11992,11 @@ func _draw_first_contact_preview(preview: Dictionary, accent: Color, cue_rebound
 	var target_end: Vector2 = target_start + target_dir * target_len
 	var target_alpha := lerpf(0.18, 0.78, impact_strength)
 	var target_width := lerpf(1.0, 3.0, transfer_strength)
-	draw_circle(cue_center, float(cue_ball.radius), Color(0.82, 1.0, 1.0, 0.14))
-	draw_arc(cue_center, float(cue_ball.radius), 0.0, TAU, 44, Color(0.82, 1.0, 1.0, 0.62), 2.0)
-	draw_circle(contact, lerpf(3.0, 5.5, impact_strength), Color(1.0, 0.86, 0.32, 0.42 + impact_strength * 0.50))
-	draw_line(target_start, target_end, Color(accent.r, accent.g, accent.b, target_alpha), target_width)
-	draw_circle(target_end, lerpf(2.0, 4.5, transfer_strength), Color(accent.r, accent.g, accent.b, target_alpha + 0.06))
+	_draw_fx_disc(cue_center, float(cue_ball.radius), Color(0.82, 1.0, 1.0, 0.14))
+	_draw_fx_ring(cue_center, float(cue_ball.radius), Color(0.82, 1.0, 1.0, 0.62), &"thin_ring")
+	_draw_fx_disc(contact, lerpf(3.0, 5.5, impact_strength), Color(1.0, 0.86, 0.32, 0.42 + impact_strength * 0.50), &"spark")
+	_draw_fx_line(target_start, target_end, Color(accent.r, accent.g, accent.b, target_alpha), target_width)
+	_draw_fx_disc(target_end, lerpf(2.0, 4.5, transfer_strength), Color(accent.r, accent.g, accent.b, target_alpha + 0.06), &"spark")
 	if impact_strength < 0.34:
 		var font := _hex_font()
 		draw_string(font, target_end + Vector2(6.0, -8.0), "graze", HORIZONTAL_ALIGNMENT_LEFT, 72.0, 13, Color(1.0, 0.86, 0.34, 0.62))
@@ -11834,8 +12005,8 @@ func _draw_first_contact_preview(preview: Dictionary, accent: Color, cue_rebound
 		var cue_rebound_end := cue_rebound_start + cue_ricochet_dir * lerpf(128.0, 68.0, impact_strength) * cue_rebound_scale
 		var rebound_alpha := clampf(lerpf(0.68, 0.42, impact_strength) + (cue_rebound_scale - 1.0) * 0.18, 0.0, 0.92)
 		var rebound_width := 2.0 + maxf(0.0, cue_rebound_scale - 1.0)
-		draw_line(cue_rebound_start, cue_rebound_end, Color(0.82, 1.0, 1.0, rebound_alpha), rebound_width)
-		draw_circle(cue_rebound_end, 3.5 + maxf(0.0, cue_rebound_scale - 1.0), Color(0.82, 1.0, 1.0, clampf(0.72 + (cue_rebound_scale - 1.0) * 0.12, 0.0, 0.95)))
+		_draw_fx_line(cue_rebound_start, cue_rebound_end, Color(0.82, 1.0, 1.0, rebound_alpha), rebound_width)
+		_draw_fx_disc(cue_rebound_end, 3.5 + maxf(0.0, cue_rebound_scale - 1.0), Color(0.82, 1.0, 1.0, clampf(0.72 + (cue_rebound_scale - 1.0) * 0.12, 0.0, 0.95)), &"spark")
 		if cue_rebound_scale > 1.05:
 			var font := _hex_font()
 			draw_string(font, cue_rebound_end + Vector2(6.0, -8.0), "cue path", HORIZONTAL_ALIGNMENT_LEFT, 84.0, 13, Color(0.82, 1.0, 1.0, 0.78))
@@ -11858,14 +12029,14 @@ func _draw_entropy_preview(preview: Dictionary, accent: Color, max_steps: int = 
 		var hit = _preview_next_ball(origin, dir, used)
 		if hit.is_empty():
 			var end := origin + dir * (150.0 - step * 24.0)
-			draw_line(origin + dir * (BALL_RADIUS + 9.0), end, Color(accent.r, accent.g, accent.b, alpha * 0.62), 1.5)
+			_draw_fx_line(origin + dir * (BALL_RADIUS + 9.0), end, Color(accent.r, accent.g, accent.b, alpha * 0.62), 1.5, &"beam_soft")
 			break
 		var ball = hit.get("ball")
 		var contact: Vector2 = hit.get("contact", origin)
 		var next_dir: Vector2 = hit.get("dir", dir)
 		var hit_strength := clampf(float(hit.get("strength", 1.0)), 0.0, 1.0)
-		draw_line(origin + dir * (BALL_RADIUS + 9.0), contact, Color(accent.r, accent.g, accent.b, alpha * lerpf(0.45, 1.0, hit_strength)), lerpf(1.0, 2.0, hit_strength))
-		draw_circle(contact, lerpf(2.0, 4.0, hit_strength), Color(accent.r, accent.g, accent.b, alpha + 0.12))
+		_draw_fx_line(origin + dir * (BALL_RADIUS + 9.0), contact, Color(accent.r, accent.g, accent.b, alpha * lerpf(0.45, 1.0, hit_strength)), lerpf(1.0, 2.0, hit_strength))
+		_draw_fx_disc(contact, lerpf(2.0, 4.0, hit_strength), Color(accent.r, accent.g, accent.b, alpha + 0.12), &"spark")
 		if ball != null and is_instance_valid(ball):
 			used[ball.ball_id] = true
 			origin = ball.global_position
@@ -11917,21 +12088,18 @@ func _draw_field_power_meter(dir: Vector2, accent: Color, power_amount: float, t
 	var side := Vector2(-dir.y, dir.x)
 	var origin: Vector2 = cue_ball.global_position - dir * (tip_inner_offset + 36.0) + side * 26.0
 	var length := 112.0
-	var base_start := origin - dir * length * 0.5
-	var base_end := origin + dir * length * 0.5
-	var fill_end := base_start.lerp(base_end, clampf(power_amount, 0.0, 1.0))
-	draw_line(base_start, base_end, Color(0.015, 0.012, 0.018, 0.86), 10.0)
-	draw_line(base_start, fill_end, Color(accent.r, accent.g, accent.b, 0.94), 8.0)
-	draw_line(base_start, base_end, Color(1.0, 1.0, 1.0, 0.42), 2.0)
-	draw_circle(fill_end, 5.0, Color(1.0, 0.86, 0.36, 0.95))
+	draw_set_transform(origin, dir.angle(), Vector2.ONE)
+	var fill_length := length * clampf(power_amount, 0.0, 1.0)
+	_draw_hud_fx_sprite(&"power_bar", Rect2(Vector2(-length * 0.5, -8.0), Vector2(length, 16.0)), Color(0.62, 0.54, 0.48, 0.98))
+	_draw_fx_sprite(&"beam_soft", Rect2(Vector2(-length * 0.5, -8.0), Vector2(fill_length, 16.0)), Color(accent.r, accent.g, accent.b, 0.34))
+	_draw_fx_sprite(&"beam", Rect2(Vector2(-length * 0.5, -5.0), Vector2(fill_length, 10.0)), Color(accent.r * 0.45 + 0.55, accent.g * 0.45 + 0.55, accent.b * 0.45 + 0.55, 0.96))
+	_draw_hud_fx_sprite(&"tiny_chip", Rect2(Vector2(length * (clampf(power_amount, 0.0, 1.0) - 0.5) - 6.0, -6.0), Vector2(12.0, 12.0)), Color(1.0, 0.86, 0.36, 0.95))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _draw_spin_reticle(accent: Color) -> void:
 	var center: Vector2 = cue_ball.global_position + Vector2(54, -54)
 	var radius := 25.0
-	draw_circle(center, radius + 6.0, Color(0.015, 0.012, 0.02, 0.72))
-	draw_arc(center, radius, 0.0, TAU, 48, Color(accent.r, accent.g, accent.b, 0.72), 2.0)
-	draw_line(center + Vector2(-radius, 0), center + Vector2(radius, 0), Color(1, 1, 1, 0.20), 1.0)
-	draw_line(center + Vector2(0, -radius), center + Vector2(0, radius), Color(1, 1, 1, 0.20), 1.0)
+	_draw_hud_fx_sprite(&"glow_ring", Rect2(center - Vector2(radius + 11.0, radius + 11.0), Vector2((radius + 11.0) * 2.0, (radius + 11.0) * 2.0)), Color(0.28, 1.0, 0.86, 0.36))
+	_draw_hud_fx_sprite(&"pulse_ring", Rect2(center - Vector2(radius + 6.0, radius + 6.0), Vector2((radius + 6.0) * 2.0, (radius + 6.0) * 2.0)), Color(accent.r, accent.g, accent.b, 0.78))
 	var pip: Vector2 = center + Vector2(cue_spin.x, -cue_spin.y) * (radius - 5.0)
-	draw_circle(pip, 6.0, Color(0.72, 1.0, 0.95, 0.95))
-	draw_arc(pip, 8.0, 0.0, TAU, 24, Color(0.02, 0.04, 0.045, 0.95), 2.0)
+	_draw_hud_fx_sprite(&"tiny_chip", Rect2(pip - Vector2(7.0, 7.0), Vector2(14.0, 14.0)), Color(0.72, 1.0, 0.95, 0.95))
