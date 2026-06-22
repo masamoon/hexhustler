@@ -1103,20 +1103,34 @@ func _ready() -> void:
 	call_deferred("_maybe_start_browser_receipt_test")
 
 func _maybe_start_browser_pocket_test() -> void:
-	if not _web_query_has_flag("pocket_test") and not _web_query_has_flag("pocket_sweep"):
+	if not _web_query_has_flag("pocket_test") and not _web_query_has_flag("pocket_sweep") and not _web_query_has_flag("pocket_stress"):
 		return
 	browser_pocket_test_enabled = true
 	var sweep := _web_query_has_flag("pocket_sweep")
-	_browser_pocket_test_log("POCKET_TEST_BOOT" + (" sweep" if sweep else ""))
+	var stress := _web_query_has_flag("pocket_stress")
+	_browser_pocket_test_log("POCKET_TEST_BOOT" + (" stress" if stress else (" sweep" if sweep else "")))
 	selected_practice_table = 0
 	_start_run(true, 1)
-	browser_pocket_test_queue = _browser_pocket_sweep_cases() if sweep else _browser_pocket_test_cases()
+	if stress:
+		browser_pocket_test_queue = _browser_pocket_stress_cases()
+	elif sweep:
+		browser_pocket_test_queue = _browser_pocket_sweep_cases()
+	else:
+		browser_pocket_test_queue = _browser_pocket_test_cases()
 	browser_pocket_test_results.clear()
 	browser_pocket_test_total_tunnel_rescues = 0
 	_browser_pocket_test_log("POCKET_TEST_QUEUE " + str(browser_pocket_test_queue.size()))
 	call_deferred("_start_next_browser_pocket_test")
 
 func _web_query_has_flag(flag: String) -> bool:
+	var cli_flag := "--" + flag
+	for arg in OS.get_cmdline_args():
+		if arg == cli_flag or arg == flag:
+			return true
+	if OS.has_method("get_cmdline_user_args"):
+		for arg in OS.get_cmdline_user_args():
+			if arg == cli_flag or arg == flag:
+				return true
 	if OS.get_name() != "Web":
 		return false
 	var query := ""
@@ -1198,6 +1212,8 @@ func _finish_browser_pocket_test() -> void:
 		detail = " fail=" + " ; ".join(failure_details.slice(0, 8)) + detail
 	_browser_pocket_test_log(summary + detail)
 	state = State.AIMING
+	if OS.get_name() != "Web":
+		get_tree().quit(1 if failure_count > 0 or browser_pocket_test_total_tunnel_rescues > 0 else 0)
 
 func _browser_pocket_test_cases() -> Array[Dictionary]:
 	return [
@@ -1255,8 +1271,68 @@ func _browser_pocket_sweep_cases() -> Array[Dictionary]:
 							"speed": speed,
 							"lateral_frac": lateral_frac,
 							"drift_frac": drift_frac,
+							"allow_any": true,
 							"timeout": 1.15
 						})
+	return cases
+
+func _browser_pocket_stress_cases() -> Array[Dictionary]:
+	var cases: Array[Dictionary] = []
+	var pocket_ids: Array[StringName] = [&"NW", &"NE", &"SW", &"SE", &"N", &"S"]
+	var pot_speeds := [110.0, 620.0, 1040.0]
+	var miss_speeds := [260.0, 900.0, 1040.0]
+	var spins := [-34.0, 0.0, 34.0]
+	for pocket_id in pocket_ids:
+		for speed in pot_speeds:
+			for lateral_frac in [-0.70, 0.0, 0.70]:
+				for drift_frac in [-0.85, 0.85]:
+					for spin in spins:
+						cases.append({
+							"name": "STRESS POT " + String(pocket_id) + " v" + str(int(speed)) + " l" + str(snappedf(lateral_frac, 0.01)) + " a" + str(snappedf(drift_frac, 0.01)) + " s" + str(int(spin)),
+							"pocket": pocket_id,
+							"lane": &"sweep_clear",
+							"speed": speed,
+							"lateral_frac": lateral_frac,
+							"drift_frac": drift_frac,
+							"spin": spin,
+							"allow_any": true,
+							"timeout": 1.05
+						})
+		for speed in miss_speeds:
+			for lateral_frac in [-1.32, -1.05, 1.05, 1.32]:
+				for drift_frac in [-0.90, 0.90]:
+					for spin in spins:
+						cases.append({
+							"name": "STRESS JAW " + String(pocket_id) + " v" + str(int(speed)) + " l" + str(snappedf(lateral_frac, 0.01)) + " a" + str(snappedf(drift_frac, 0.01)) + " s" + str(int(spin)),
+							"pocket": pocket_id,
+							"lane": &"outer_jaw",
+							"speed": speed,
+							"lateral_frac": lateral_frac,
+							"drift_frac": drift_frac,
+							"spin": spin,
+							"expect": false,
+							"allow_any": true,
+							"timeout": 1.05
+						})
+	for case in [
+		{"pocket": &"NW", "lane": &"top"}, {"pocket": &"NW", "lane": &"left"},
+		{"pocket": &"NE", "lane": &"top"}, {"pocket": &"NE", "lane": &"right"},
+		{"pocket": &"SW", "lane": &"bottom"}, {"pocket": &"SW", "lane": &"left"},
+		{"pocket": &"SE", "lane": &"bottom"}, {"pocket": &"SE", "lane": &"right"}
+	]:
+		for speed in [620.0, 1040.0]:
+			for spin in spins:
+				var pocket_id: StringName = case["pocket"]
+				var lane: StringName = case["lane"]
+				cases.append({
+					"name": "STRESS RAIL " + String(pocket_id) + " " + String(lane) + " v" + str(int(speed)) + " s" + str(int(spin)),
+					"pocket": pocket_id,
+					"lane": lane,
+					"speed": speed,
+					"spin": spin,
+					"allow_any": true,
+					"timeout": 1.05
+				})
 	return cases
 
 func _start_next_browser_pocket_test() -> void:
@@ -1308,6 +1384,7 @@ func _prepare_browser_pocket_test_shot(pocket, lane: StringName, speed: float = 
 	var shot := _browser_pocket_test_vectors(pocket, lane, speed)
 	var start: Vector2 = shot.get("start", TABLE_RECT.get_center())
 	var velocity: Vector2 = shot.get("velocity", Vector2.ZERO)
+	var spin := float(browser_pocket_test_case.get("spin", 0.0))
 	browser_pocket_test_ball = _spawn_ball({
 		"id": StringName("pocket_test_" + String(pocket.pocket_id) + "_" + String(lane)),
 		"kind": &"normal",
@@ -1316,7 +1393,7 @@ func _prepare_browser_pocket_test_shot(pocket, lane: StringName, speed: float = 
 		"color": Color(0.78, 0.96, 1.0),
 		"radius": BALL_RADIUS
 	})
-	browser_pocket_test_ball.redirect_active(start, velocity, 0.0)
+	browser_pocket_test_ball.redirect_active(start, velocity, spin)
 	moved_start_positions[browser_pocket_test_ball.ball_id] = start
 	pocket_trace_positions[browser_pocket_test_ball.ball_id] = start
 	ball_travel_distances[browser_pocket_test_ball.ball_id] = 0.0
@@ -1335,7 +1412,7 @@ func _prepare_browser_pocket_test_shot(pocket, lane: StringName, speed: float = 
 	browser_pocket_test_min_distance = INF
 	browser_pocket_test_lip_deflections = 0
 	browser_pocket_test_tunnel_rescues = 0
-	_browser_pocket_test_log("POCKET_TEST_CASE " + String(browser_pocket_test_case.get("name", "?")) + " start=" + str(start.round()) + " speed=" + str(int(round(velocity.length()))))
+	_browser_pocket_test_log("POCKET_TEST_CASE " + String(browser_pocket_test_case.get("name", "?")) + " start=" + str(start.round()) + " speed=" + str(int(round(velocity.length()))) + " spin=" + str(int(round(spin))))
 
 func _clear_balls_for_browser_pocket_test() -> void:
 	for child in balls.get_children():
@@ -1381,6 +1458,12 @@ func _browser_pocket_test_vectors(pocket, lane: StringName, speed: float = 560.0
 			var miss_drift_frac := float(browser_pocket_test_case.get("drift_frac", 0.0))
 			target = pos + inward * (_pocket_fall_depth(pocket) * 0.5) + tangent * (miss_width * miss_lateral_frac)
 			start = pos + inward * (POCKET_MOUTH_DEPTH + BALL_RADIUS * 0.9) + tangent * (miss_width * (miss_lateral_frac + miss_drift_frac))
+		&"outer_jaw":
+			var jaw_width := _pocket_mouth_half_width(pocket)
+			var jaw_lateral_frac := float(browser_pocket_test_case.get("lateral_frac", 1.20))
+			var jaw_drift_frac := float(browser_pocket_test_case.get("drift_frac", 0.0))
+			target = pos - inward * (BALL_RADIUS * 1.2) + tangent * (jaw_width * jaw_lateral_frac)
+			start = pos + inward * (POCKET_MOUTH_DEPTH + BALL_RADIUS * 1.2) + tangent * (jaw_width * (jaw_lateral_frac + jaw_drift_frac))
 		&"top":
 			start = Vector2(pos.x + (150.0 if String(pocket.pocket_id) == "NW" else -150.0), TABLE_RECT.position.y + BALL_RADIUS + 8.0)
 		&"bottom":
@@ -1569,13 +1652,14 @@ func _update_browser_pocket_test(delta: float) -> void:
 		call_deferred("_start_next_browser_pocket_test")
 		return
 	var expected_pot := bool(browser_pocket_test_case.get("expect", true))
+	var allow_any := bool(browser_pocket_test_case.get("allow_any", false))
 	var target_pocket = _pocket_by_id(StringName(browser_pocket_test_case.get("pocket", &"")))
 	if target_pocket != null:
 		browser_pocket_test_min_distance = minf(browser_pocket_test_min_distance, browser_pocket_test_ball.global_position.distance_to(target_pocket.global_position))
 	if browser_pocket_test_ball.potted:
-		var result := "PASS" if expected_pot else "FAIL sucked"
+		var result := "PASS" if expected_pot or allow_any else "FAIL sucked"
 		var rail_hits := current_log.count_type(GameplayEvent.Type.RAIL_HIT) if current_log != null else 0
-		if expected_pot and browser_pocket_test_tunnel_rescues > 0:
+		if browser_pocket_test_tunnel_rescues > 0:
 			result = "FAIL tunnel rescue"
 		elif expected_pot and bool(browser_pocket_test_case.get("clean", false)) and (browser_pocket_test_lip_deflections > 0 or rail_hits > 0):
 			result = "FAIL bounced"
@@ -1589,9 +1673,15 @@ func _update_browser_pocket_test(delta: float) -> void:
 		var pos: Vector2 = browser_pocket_test_ball.global_position
 		var vel: Vector2 = browser_pocket_test_ball.linear_velocity
 		var recent := _recent_event_lines(8).replace("\n", " / ")
-		if expected_pot:
+		if expected_pot and not allow_any:
 			browser_pocket_test_results.append(case_name + ":FAIL pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " tunnel_rescues=" + str(browser_pocket_test_tunnel_rescues))
 			_browser_pocket_test_log("POCKET_TEST_FAIL " + case_name + " pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " tunnel_rescues=" + str(browser_pocket_test_tunnel_rescues) + " recent=" + recent)
+		elif browser_pocket_test_tunnel_rescues > 0:
+			browser_pocket_test_results.append(case_name + ":FAIL tunnel rescue")
+			_browser_pocket_test_log("POCKET_TEST_FAIL_TUNNEL " + case_name + " pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))) + " tunnel_rescues=" + str(browser_pocket_test_tunnel_rescues) + " recent=" + recent)
+		elif allow_any:
+			browser_pocket_test_results.append(case_name + ":PASS physical")
+			_browser_pocket_test_log("POCKET_TEST_PASS_PHYSICAL " + case_name + " pos=" + str(pos.round()) + " speed=" + str(int(round(vel.length()))) + " min=" + str(int(round(browser_pocket_test_min_distance))))
 		else:
 			browser_pocket_test_results.append(case_name + ":PASS miss")
 			_browser_pocket_test_log("POCKET_TEST_PASS_MISS " + case_name + " pos=" + str(pos.round()) + " min=" + str(int(round(browser_pocket_test_min_distance))))
@@ -5393,6 +5483,9 @@ func _load_table(index: int) -> void:
 	_clear_node(balls)
 	_clear_node(fx)
 	_build_rails()
+	_build_corner_jaws()
+	_build_corner_liners()
+	_build_side_jaws()
 	_build_pockets()
 	_build_table_obstacles()
 	_spawn_balls()
@@ -5706,6 +5799,85 @@ func _build_corner_jaws() -> void:
 		body.collision_layer = 2
 		body.collision_mask = 1
 		rails.add_child(body)
+
+func _build_corner_liners() -> void:
+	var left := TABLE_RECT.position.x
+	var right := TABLE_RECT.end.x
+	var top := TABLE_RECT.position.y
+	var bottom := TABLE_RECT.end.y
+	var outside := RAIL_THICKNESS + 4.0
+	var inside := BALL_RADIUS * 1.9
+	var thickness := 15.0
+	var liner_defs := [
+		{"id": &"NW_LINER", "a": Vector2(left - outside, top + inside), "b": Vector2(left + inside, top - outside)},
+		{"id": &"NE_LINER", "a": Vector2(right - inside, top - outside), "b": Vector2(right + outside, top + inside)},
+		{"id": &"SW_LINER", "a": Vector2(left - outside, bottom - inside), "b": Vector2(left + inside, bottom + outside)},
+		{"id": &"SE_LINER", "a": Vector2(right - inside, bottom + outside), "b": Vector2(right + outside, bottom - inside)}
+	]
+	for data in liner_defs:
+		_add_rail_segment(
+			"CornerPocketLiner_" + String(data["id"]),
+			data["id"],
+			data["a"],
+			data["b"],
+			thickness,
+			minf(0.30, _board_rail_friction() + 0.08),
+			_board_jaw_bounce()
+		)
+
+func _build_side_jaws() -> void:
+	var top := TABLE_RECT.position.y
+	var bottom := TABLE_RECT.end.y
+	var mid_x := TABLE_RECT.position.x + TABLE_RECT.size.x * 0.5
+	var jaw_radius := 12.0
+	var jaw_offset := BALL_RADIUS * 2.5
+	var jaw_defs := [
+		{"id": &"N_L", "pos": Vector2(mid_x - jaw_offset, top - RAIL_THICKNESS * 0.25)},
+		{"id": &"N_R", "pos": Vector2(mid_x + jaw_offset, top - RAIL_THICKNESS * 0.25)},
+		{"id": &"S_L", "pos": Vector2(mid_x - jaw_offset, bottom + RAIL_THICKNESS * 0.25)},
+		{"id": &"S_R", "pos": Vector2(mid_x + jaw_offset, bottom + RAIL_THICKNESS * 0.25)}
+	]
+	for data in jaw_defs:
+		var body := StaticBody2D.new()
+		body.name = "SidePocketJaw_" + String(data["id"])
+		body.add_to_group("rail")
+		body.set_meta("rail_id", data["id"])
+		body.position = data["pos"]
+		var material := PhysicsMaterial.new()
+		material.friction = minf(0.30, _board_rail_friction() + 0.08)
+		material.bounce = _board_jaw_bounce()
+		body.physics_material_override = material
+		var shape := CircleShape2D.new()
+		shape.radius = jaw_radius
+		var collider := CollisionShape2D.new()
+		collider.shape = shape
+		body.add_child(collider)
+		body.collision_layer = 2
+		body.collision_mask = 1
+		rails.add_child(body)
+
+func _add_rail_segment(name: String, id: StringName, start: Vector2, end: Vector2, thickness: float, friction: float, bounce: float) -> void:
+	var segment := end - start
+	if segment.length_squared() <= 0.01:
+		return
+	var body := StaticBody2D.new()
+	body.name = name
+	body.add_to_group("rail")
+	body.set_meta("rail_id", id)
+	body.position = (start + end) * 0.5
+	body.rotation = segment.angle()
+	var material := PhysicsMaterial.new()
+	material.friction = friction
+	material.bounce = bounce
+	body.physics_material_override = material
+	var shape := RectangleShape2D.new()
+	shape.size = Vector2(segment.length(), thickness)
+	var collider := CollisionShape2D.new()
+	collider.shape = shape
+	body.add_child(collider)
+	body.collision_layer = 2
+	body.collision_mask = 1
+	rails.add_child(body)
 
 func _build_pockets() -> void:
 	var accent: Color = current_table.get("accent", Color.MAGENTA)

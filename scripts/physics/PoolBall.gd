@@ -81,12 +81,15 @@ func pot() -> void:
 	if potted:
 		return
 	potted = true
+	visible = false
+	call_deferred("_apply_potted_physics_state")
+
+func _apply_potted_physics_state() -> void:
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
 	collision_layer = 0
 	collision_mask = 0
 	freeze = true
-	visible = false
 
 func restore_at(pos: Vector2) -> void:
 	potted = false
