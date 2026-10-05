@@ -1,0 +1,48 @@
+// Gameplay constants ported verbatim from GameRoot.gd.
+import { rect, v } from "./vec";
+
+export const TABLE_RECT = rect(96, 128, 1088, 560);
+export const RAIL_THICKNESS = 38;
+export const BALL_RADIUS = 18;
+export const DESIGN_W = 1280;
+export const DESIGN_H = 800;
+export const PLAY_CAMERA_POSITION = v(640, 398);
+export const CUE_START = v(330, 408);
+export const MIN_POWER = 115;
+export const MAX_POWER = 1850;
+export const MAX_BALL_SPEED = 1040;
+export const SETTLE_LINEAR_SPEED = 14;
+export const SETTLE_ANGULAR_SPEED = 0.9;
+export const SETTLE_FRAMES_NEEDED = 34;
+export const MAX_SHOT_SECONDS = 10;
+export const STARTING_CASH = 25;
+export const STARTING_BALLS_LEFT = 6;
+export const ONE_BALL_CLEAR_SCORE = 850;
+export const EVERY_SHOT_POT_BASE_SCORE = 260;
+export const EVERY_SHOT_POT_PER_SHOT_SCORE = 80;
+export const POCKET_CORNER_GAP = 76;
+export const POCKET_SIDE_GAP = 132;
+export const POCKET_SENSOR_RADIUS = 31;
+export const POCKET_VISUAL_RADIUS = 42;
+export const POCKET_CAPTURE_RADIUS = 29;
+export const POCKET_CUP_DEPTH = 13;
+export const POCKET_MOUTH_DEPTH = 78;
+export const POCKET_CORNER_CUP_CENTER = v(96.3, 68.9);
+export const POCKET_SIDE_CUP_CENTER = v(108.3, 68.7);
+export const OUT_OF_BOUNDS_MARGIN = 30;
+export const TABLE_BACKSTOP_THICKNESS = 28;
+export const POCKET_THROAT_RADIUS = 58;
+export const POCKET_ESCAPE_DEPTH = 18;
+export const CORNER_MOUTH_GUARD_RADIUS = 82;
+export const SPAWN_CLEARANCE = 48;
+export const SPIN_STEP = 0.25;
+export const MAX_SPIN = 1;
+export const PREVIEW_BALL_RESTITUTION = 0.88;
+export const PREVIEW_CUE_SIDE_SPIN = 0.13;
+export const PREVIEW_CUE_FOLLOW_SPIN = 0.12;
+export const CLEARED_TABLE_FAST_RESOLVE_DELAY = 0.62;
+export const LIVE_TRAVEL_HISTORY_POINTS = 96;
+export const PHYSICS_HZ = 60;
+export const HUSTLER_NAME = "Lucien Vale";
+
+export const THEME_GOLD: [number, number, number, number] = [1.0, 0.78, 0.24, 0.96];
